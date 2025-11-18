@@ -16,9 +16,16 @@ export async function POST({ request }) {
 		// Build the order data according to PayPal Orders v2 API
 		const subtotal = body.amount || '10.00';
 
-		// Start with $0 tax - will update when address is selected in PayPal
-		const taxAmount = '0.00';
-		const totalAmount = subtotal;
+		// Calculate initial tax if shipping address is provided
+		// This ensures new PayPal account users see correct amount
+		let taxAmount = '0.00';
+		let totalAmount = subtotal;
+
+		if (body.shipping_address?.admin_area_1) {
+			const initialState = body.shipping_address.admin_area_1;
+			taxAmount = calculateTax(subtotal, initialState);
+			totalAmount = calculateTotal(subtotal, initialState);
+		}
 
 		// Build purchase unit with optional shipping address
 		const purchaseUnit = {
