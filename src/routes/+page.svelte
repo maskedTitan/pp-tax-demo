@@ -187,15 +187,15 @@
 					Dynamic Tax Calculation Demo
 				</p>
 				<p class="text-xs text-purple-800 mb-2">
-					The order starts at <span class="font-semibold">${currentTotal}</span> (includes {shippingAddress.admin_area_1} tax). If you
-					change your shipping address to a different state in PayPal, the total updates automatically.
+					The order starts at <span class="font-semibold">$10.00</span> (no tax). When you
+					select your shipping address in PayPal, the total updates automatically based on the state.
 				</p>
 				<div class="text-xs text-purple-700 mt-2 space-y-1">
-					<p><span class="font-semibold">Examples if you change state in PayPal:</span></p>
-					<p>• California (8.5%): ${currentTotal} (no change)</p>
-					<p>• Texas (8.0%): ${currentTotal} → $10.80</p>
-					<p>• Florida (7.0%): ${currentTotal} → $10.70</p>
-					<p>• Delaware (0%): ${currentTotal} → $10.00</p>
+					<p><span class="font-semibold">Examples when you select state in PayPal:</span></p>
+					<p>• California (8.5%): $10.00 → $10.85</p>
+					<p>• Texas (8.0%): $10.00 → $10.80</p>
+					<p>• Florida (7.0%): $10.00 → $10.70</p>
+					<p>• Delaware (0%): $10.00 → $10.00</p>
 				</div>
 			</div>
 		</div>
