@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { loadScript } from '@paypal/paypal-js';
 	import { PUBLIC_PAYPAL_CLIENT_ID } from '$env/static/public';
+	import { calculateTax, calculateTotal, getTaxRate } from '$lib/taxRates.js';
 
 	let paypalButtonsContainer;
 	let errorMessage = '';
@@ -11,6 +12,22 @@
 
 	// Product details
 	const PRODUCT_SUBTOTAL = '10.00';
+
+	// Shipping address with prefilled values
+	let shippingAddress = {
+		name: 'John Doe',
+		address_line_1: '123 Main Street',
+		address_line_2: 'Apt 4B',
+		admin_area_2: 'San Francisco',
+		admin_area_1: 'CA',
+		postal_code: '94102',
+		country_code: 'US'
+	};
+
+	// Calculate tax and total based on current shipping address
+	$: currentTax = calculateTax(PRODUCT_SUBTOTAL, shippingAddress.admin_area_1);
+	$: currentTotal = calculateTotal(PRODUCT_SUBTOTAL, shippingAddress.admin_area_1);
+	$: currentTaxRate = getTaxRate(shippingAddress.admin_area_1);
 
 	onMount(async () => {
 		try {
@@ -30,10 +47,12 @@
 									'Content-Type': 'application/json'
 								},
 								body: JSON.stringify({
-									amount: '10.00',
+									amount: PRODUCT_SUBTOTAL,
 									currency_code: 'USD',
 									description: 'Sample Product',
-									brand_name: 'PayPal Demo Store'
+									brand_name: 'PayPal Demo Store',
+									shipping_address: shippingAddress,
+									initial_state: shippingAddress.admin_area_1
 								})
 							});
 
@@ -51,41 +70,40 @@
 						}
 					},
 					// Handles shipping address changes - updates tax dynamically
-					onShippingChange: async (data, actions) => {
-						try {
-							const shippingAddress = data.shipping_address;
-							const stateCode = shippingAddress?.state;
+					onShippingAddressChange: (data, actions) => {
+						const stateCode = data.shippingAddress?.state;
+						const countryCode = data.shippingAddress?.countryCode;
 
-							if (!stateCode) {
-								return actions.resolve();
-							}
-
-							// Call server to update order with tax
-							const response = await fetch('/api/paypal/update-order', {
-								method: 'POST',
-								headers: {
-									'Content-Type': 'application/json'
-								},
-								body: JSON.stringify({
-									orderId: data.orderID,
-									subtotal: PRODUCT_SUBTOTAL,
-									stateCode: stateCode
-								})
-							});
-
-							const updateData = await response.json();
-
-							if (!response.ok) {
-								console.error('Failed to update order:', updateData.error);
-								return actions.reject();
-							}
-
-							console.log('Order updated with tax:', updateData);
-							return actions.resolve();
-						} catch (error) {
-							console.error('Error in onShippingChange:', error);
-							return actions.reject();
+						// Only support US addresses
+						if (countryCode && countryCode !== 'US') {
+							return actions.reject(data.errors.COUNTRY_ERROR);
 						}
+
+						if (!stateCode) {
+							return Promise.resolve();
+						}
+
+						// Call server to update order with tax
+						return fetch('/api/paypal/update-order', {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json'
+							},
+							body: JSON.stringify({
+								orderId: data.orderID,
+								subtotal: PRODUCT_SUBTOTAL,
+								stateCode: stateCode
+							})
+						})
+							.then((response) => response.json())
+							.then((updateData) => {
+								console.log('Order updated with tax:', updateData);
+								return Promise.resolve();
+							})
+							.catch((error) => {
+								console.error('Error in onShippingAddressChange:', error);
+								return actions.reject();
+							});
 					},
 					// Handles successful payment - captures on server-side
 					onApprove: async (data) => {
@@ -147,7 +165,16 @@
 		<h2 class="text-2xl font-semibold mb-4">Product Details</h2>
 		<div class="mb-6">
 			<p class="text-gray-700"><span class="font-semibold">Product:</span> Sample Product</p>
-			<p class="text-gray-700"><span class="font-semibold">Price:</span> $10.00 USD</p>
+			<div class="text-gray-700 space-y-1">
+				<p><span class="font-semibold">Subtotal:</span> ${PRODUCT_SUBTOTAL} USD</p>
+				<p>
+					<span class="font-semibold">Tax ({currentTaxRate}%):</span> ${currentTax} USD
+					<span class="text-sm text-gray-600">({shippingAddress.admin_area_1})</span>
+				</p>
+				<p class="text-lg font-bold text-gray-900">
+					<span class="font-semibold">Total:</span> ${currentTotal} USD
+				</p>
+			</div>
 			<div class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
 				<p class="text-sm text-blue-800">
 					<span class="font-semibold">Vaulting Enabled:</span> Your payment method will be securely
@@ -160,18 +187,89 @@
 					Dynamic Tax Calculation Demo
 				</p>
 				<p class="text-xs text-purple-800 mb-2">
-					The order starts at <span class="font-semibold">$10.00</span> (no tax). When you
-					select your shipping address in PayPal, the total updates automatically based on your
-					state's tax rate.
+					The order starts at <span class="font-semibold">${currentTotal}</span> (includes {shippingAddress.admin_area_1} tax). If you
+					change your shipping address to a different state in PayPal, the total updates automatically.
 				</p>
 				<div class="text-xs text-purple-700 mt-2 space-y-1">
-					<p><span class="font-semibold">Examples:</span></p>
-					<p>• California (8.5%): $10.00 → $10.85</p>
-					<p>• Texas (8.0%): $10.00 → $10.80</p>
-					<p>• Florida (7.0%): $10.00 → $10.70</p>
-					<p>• Delaware (0%): $10.00 → $10.00</p>
+					<p><span class="font-semibold">Examples if you change state in PayPal:</span></p>
+					<p>• California (8.5%): ${currentTotal} (no change)</p>
+					<p>• Texas (8.0%): ${currentTotal} → $10.80</p>
+					<p>• Florida (7.0%): ${currentTotal} → $10.70</p>
+					<p>• Delaware (0%): ${currentTotal} → $10.00</p>
 				</div>
 			</div>
+		</div>
+
+		<!-- Shipping Address Form -->
+		<h2 class="text-2xl font-semibold mb-4 mt-6">Shipping Address</h2>
+		<div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded">
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div class="md:col-span-2">
+					<label class="block text-sm font-semibold text-gray-700 mb-1">Full Name</label>
+					<input
+						type="text"
+						bind:value={shippingAddress.name}
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+				</div>
+				<div class="md:col-span-2">
+					<label class="block text-sm font-semibold text-gray-700 mb-1">Address Line 1</label>
+					<input
+						type="text"
+						bind:value={shippingAddress.address_line_1}
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+				</div>
+				<div class="md:col-span-2">
+					<label class="block text-sm font-semibold text-gray-700 mb-1">
+						Address Line 2 (Optional)
+					</label>
+					<input
+						type="text"
+						bind:value={shippingAddress.address_line_2}
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+				</div>
+				<div>
+					<label class="block text-sm font-semibold text-gray-700 mb-1">City</label>
+					<input
+						type="text"
+						bind:value={shippingAddress.admin_area_2}
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+				</div>
+				<div>
+					<label class="block text-sm font-semibold text-gray-700 mb-1">State</label>
+					<input
+						type="text"
+						bind:value={shippingAddress.admin_area_1}
+						placeholder="e.g., CA"
+						maxlength="2"
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+				</div>
+				<div>
+					<label class="block text-sm font-semibold text-gray-700 mb-1">Postal Code</label>
+					<input
+						type="text"
+						bind:value={shippingAddress.postal_code}
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+				</div>
+				<div>
+					<label class="block text-sm font-semibold text-gray-700 mb-1">Country Code</label>
+					<input
+						type="text"
+						bind:value={shippingAddress.country_code}
+						placeholder="US"
+						maxlength="2"
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+				</div>
+			</div>
+			<p class="text-xs text-gray-600 mt-3">
+				This address will be prefilled in PayPal checkout but can be edited during payment.
+			</p>
 		</div>
 
 		<div class="mb-4">
