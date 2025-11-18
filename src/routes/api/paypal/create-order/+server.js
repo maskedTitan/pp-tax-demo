@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { createPayPalOrder } from '$lib/paypal.js';
+import { calculateTax, calculateTotal } from '$lib/taxRates.js';
 
 /**
  * POST /api/paypal/create-order
@@ -15,39 +16,62 @@ export async function POST({ request }) {
 		// Build the order data according to PayPal Orders v2 API
 		const subtotal = body.amount || '10.00';
 
+		// Calculate initial tax based on the initial state (from prefilled address)
+		const initialState = body.initial_state || 'CA';
+		const taxAmount = calculateTax(subtotal, initialState);
+		const totalAmount = calculateTotal(subtotal, initialState);
+
+		// Build purchase unit with optional shipping address
+		const purchaseUnit = {
+			reference_id: 'default',
+			description: body.description || 'Sample Product',
+			amount: {
+				currency_code: body.currency_code || 'USD',
+				value: totalAmount,
+				breakdown: {
+					item_total: {
+						currency_code: body.currency_code || 'USD',
+						value: subtotal
+					},
+					tax_total: {
+						currency_code: body.currency_code || 'USD',
+						value: taxAmount
+					}
+				}
+			},
+			items: [
+				{
+					name: body.description || 'Sample Product',
+					unit_amount: {
+						currency_code: body.currency_code || 'USD',
+						value: subtotal
+					},
+					quantity: '1',
+					category: 'PHYSICAL_GOODS'
+				}
+			]
+		};
+
+		// Add shipping address if provided
+		if (body.shipping_address) {
+			purchaseUnit.shipping = {
+				name: {
+					full_name: body.shipping_address.name
+				},
+				address: {
+					address_line_1: body.shipping_address.address_line_1,
+					address_line_2: body.shipping_address.address_line_2 || undefined,
+					admin_area_2: body.shipping_address.admin_area_2,
+					admin_area_1: body.shipping_address.admin_area_1,
+					postal_code: body.shipping_address.postal_code,
+					country_code: body.shipping_address.country_code
+				}
+			};
+		}
+
 		const orderData = {
 			intent: 'CAPTURE',
-			purchase_units: [
-				{
-					reference_id: 'default',
-					description: body.description || 'Sample Product',
-					amount: {
-						currency_code: body.currency_code || 'USD',
-						value: subtotal,
-						breakdown: {
-							item_total: {
-								currency_code: body.currency_code || 'USD',
-								value: subtotal
-							},
-							tax_total: {
-								currency_code: body.currency_code || 'USD',
-								value: '0.00'
-							}
-						}
-					},
-					items: [
-						{
-							name: body.description || 'Sample Product',
-							unit_amount: {
-								currency_code: body.currency_code || 'USD',
-								value: subtotal
-							},
-							quantity: '1',
-							category: 'PHYSICAL_GOODS'
-						}
-					]
-				}
-			],
+			purchase_units: [purchaseUnit],
 			payment_source: {
 				paypal: {
 					experience_context: {
