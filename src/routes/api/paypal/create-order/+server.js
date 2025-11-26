@@ -77,7 +77,7 @@ export async function POST({ request }) {
 						brand_name: body.brand_name || 'Your Store',
 						landing_page: 'NO_PREFERENCE',
 						user_action: 'PAY_NOW',
-						shipping_preference: 'GET_FROM_FILE',
+						shipping_preference: body.shipping_preference || 'SET_PROVIDED_ADDRESS',
 						return_url: body.return_url || `${origin}/`,
 						cancel_url: body.cancel_url || `${origin}/`
 					},

@@ -24,6 +24,8 @@
 		country_code: 'US'
 	};
 
+	let shippingPreference = 'SET_PROVIDED_ADDRESS';
+
 	// Calculate tax and total based on current shipping address
 	$: currentTax = calculateTax(PRODUCT_SUBTOTAL, shippingAddress.admin_area_1);
 	$: currentTotal = calculateTotal(PRODUCT_SUBTOTAL, shippingAddress.admin_area_1);
@@ -52,6 +54,7 @@
 									description: 'Sample Product',
 									brand_name: 'PayPal Demo Store',
 									shipping_address: shippingAddress,
+									shipping_preference: shippingPreference,
 									initial_state: shippingAddress.admin_area_1
 								})
 							});
@@ -198,6 +201,38 @@
 					<p>• Delaware (0%): $10.00 → $10.00</p>
 				</div>
 			</div>
+		</div>
+
+		<!-- Shipping Preference Toggle -->
+		<div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded">
+			<h3 class="text-lg font-semibold mb-3">Shipping Preference</h3>
+			<div class="flex space-x-4">
+				<label class="inline-flex items-center">
+					<input
+						type="radio"
+						bind:group={shippingPreference}
+						value="SET_PROVIDED_ADDRESS"
+						class="form-radio text-blue-600"
+					/>
+					<span class="ml-2">Set Provided Address (Pre-fill)</span>
+				</label>
+				<label class="inline-flex items-center">
+					<input
+						type="radio"
+						bind:group={shippingPreference}
+						value="GET_FROM_FILE"
+						class="form-radio text-blue-600"
+					/>
+					<span class="ml-2">Get From File (PayPal Account)</span>
+				</label>
+			</div>
+			<p class="text-xs text-gray-600 mt-2">
+				{#if shippingPreference === 'SET_PROVIDED_ADDRESS'}
+					The address below will be sent to PayPal to pre-fill the checkout.
+				{:else}
+					The user will select their shipping address from their PayPal account.
+				{/if}
+			</p>
 		</div>
 
 		<!-- Shipping Address Form -->
