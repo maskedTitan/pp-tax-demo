@@ -1,4 +1,5 @@
-import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from '$env/static/private';
+import { PUBLIC_PAYPAL_CLIENT_ID } from '$env/static/public';
+import { PAYPAL_CLIENT_SECRET } from '$env/static/private';
 
 const PAYPAL_API_BASE = 'https://api-m.sandbox.paypal.com';
 
@@ -6,7 +7,7 @@ const PAYPAL_API_BASE = 'https://api-m.sandbox.paypal.com';
  * Get PayPal access token using client credentials
  */
 export async function getPayPalAccessToken() {
-	const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
+	const auth = Buffer.from(`${PUBLIC_PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
 
 	const response = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, {
 		method: 'POST',
@@ -90,6 +91,28 @@ export async function capturePayPalOrder(orderId) {
 	if (!response.ok) {
 		const error = await response.json();
 		throw new Error(`Failed to capture order: ${JSON.stringify(error)}`);
+	}
+
+	return await response.json();
+}
+
+/**
+ * Get PayPal order details
+ */
+export async function getPayPalOrder(orderId) {
+	const accessToken = await getPayPalAccessToken();
+
+	const response = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders/${orderId}`, {
+		method: 'GET',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${accessToken}`
+		}
+	});
+
+	if (!response.ok) {
+		const error = await response.json();
+		throw new Error(`Failed to get order: ${JSON.stringify(error)}`);
 	}
 
 	return await response.json();
