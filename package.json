@@ -18,6 +18,7 @@
 		"vite": "^7.1.10"
 	},
 	"dependencies": {
+		"@adyen/adyen-web": "^6.26.0",
 		"@paypal/paypal-js": "^9.0.1"
 	}
 }
