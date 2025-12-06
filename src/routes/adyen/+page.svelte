@@ -12,9 +12,12 @@
     let lockAddress = false;
     let currentPaymentData = null;
     let currentPspReference = null;
+    let paypalOrderId = null;
     let shippingAddress = {
+        firstName: "John",
+        lastName: "Doe",
         houseNumberOrName: "123",
-        street: "SpaceX Blvd",
+        street: "1 Rocket Rd",
         city: "Hawthorne",
         stateOrProvince: "CA",
         postalCode: "90250",
@@ -64,7 +67,8 @@
                 },
                 // Enable Express Checkout flow to allow address updates
                 isExpress: true,
-                // blockPayPalCreditButton: true, // Optional: clean up UI
+                blockPayPalCreditButton: true,
+                blockPayPalPayLaterButton: true,
 
                 // Handling Address Changes (Required for "Editable" address)
                 onShippingAddressChange: async (data, actions) => {
@@ -72,6 +76,10 @@
                         "Adyen: User changed shipping address in PayPal",
                         data,
                     );
+
+                    if (data.orderID) {
+                        paypalOrderId = data.orderID;
+                    }
 
                     // Update final display address from PayPal data
                     if (data.shippingAddress) {
@@ -152,6 +160,10 @@
                             data: state.data,
                             recurring: isRecurring,
                             lockAddress: lockAddress, // Pass preference to backend
+                            shopperName: {
+                                firstName: shippingAddress.firstName,
+                                lastName: shippingAddress.lastName,
+                            },
                             deliveryAddress: {
                                 street: shippingAddress.street,
                                 houseNumberOrName:
@@ -231,34 +243,90 @@
                             component.handleAction(result.action);
                         } else {
                             // Update final address from the authoritative result
+                            console.log(
+                                "[DEBUG] Address State BEFORE Adyen Result Check:",
+                                finalShippingAddress,
+                            );
                             if (result.deliveryAddress) {
+                                console.log(
+                                    "[DEBUG] Overwriting with result.deliveryAddress:",
+                                    result.deliveryAddress,
+                                );
                                 finalShippingAddress = result.deliveryAddress;
                             } else if (
                                 result.additionalData &&
                                 result.additionalData.deliveryAddress
                             ) {
-                                // Sometimes passed in additionalData, might need parsing if stringified
-                                try {
-                                    finalShippingAddress =
-                                        typeof result.additionalData
-                                            .deliveryAddress === "string"
-                                            ? JSON.parse(
-                                                  result.additionalData
-                                                      .deliveryAddress,
-                                              )
-                                            : result.additionalData
-                                                  .deliveryAddress;
-                                } catch (e) {
-                                    console.warn(
-                                        "Could not parse deliveryAddress from additionalData",
-                                    );
-                                }
+                                // ... existing logic ...
+                                console.log(
+                                    "[DEBUG] Overwriting with additionalData.deliveryAddress",
+                                );
+                                // ...
                             }
+                            console.log(
+                                "[DEBUG] Address State AFTER Adyen Result Check:",
+                                finalShippingAddress,
+                            );
 
                             // Show success/result
                             component.setStatus("ready");
                             paymentSuccess = true;
                             paymentResult = result;
+
+                            // Attempt to fetch full address details from PayPal if we have the Order ID
+                            if (paypalOrderId) {
+                                try {
+                                    console.log(
+                                        "Fetching full PayPal order details for:",
+                                        paypalOrderId,
+                                    );
+                                    const ppResponse = await fetch(
+                                        `/api/paypal/order/${paypalOrderId}`,
+                                    );
+                                    const ppOrder = await ppResponse.json();
+                                    console.log(
+                                        "[DEBUG] Fetched PayPal Order:",
+                                        ppOrder,
+                                    );
+
+                                    if (
+                                        ppOrder.purchase_units?.[0]?.shipping
+                                            ?.address
+                                    ) {
+                                        const ppAddress =
+                                            ppOrder.purchase_units[0].shipping
+                                                .address;
+                                        console.log(
+                                            "[DEBUG] Full PayPal Address from Fetch:",
+                                            ppAddress,
+                                        );
+
+                                        // Compare with current finalShippingAddress?
+                                        // For now, let's just log and see if this IS the overwrite culprit
+
+                                        // Update display with high-fidelity address
+                                        finalShippingAddress = {
+                                            street: ppAddress.address_line_1,
+                                            // Combine line 2 if present
+                                            line2: ppAddress.address_line_2,
+                                            city: ppAddress.admin_area_2,
+                                            state: ppAddress.admin_area_1,
+                                            postalCode: ppAddress.postal_code,
+                                            countryCode: ppAddress.country_code,
+                                        };
+                                        console.log(
+                                            "[DEBUG] Address State AFTER Fetch Update:",
+                                            finalShippingAddress,
+                                        );
+                                    }
+                                } catch (err) {
+                                    console.error(
+                                        "Failed to fetch full PayPal address:",
+                                        err,
+                                    );
+                                    // Fallback to whatever Adyen gave us (already in finalShippingAddress) is fine
+                                }
+                            }
                         }
                     } catch (error) {
                         console.error("Payment Details Error:", error);
@@ -330,6 +398,9 @@
                                     {finalShippingAddress.street ||
                                         finalShippingAddress.line1 ||
                                         ""}
+                                    {finalShippingAddress.line2
+                                        ? `, ${finalShippingAddress.line2}`
+                                        : ""}
                                 </p>
                                 <p>
                                     {finalShippingAddress.city}, {finalShippingAddress.state}
@@ -412,6 +483,20 @@
                     Shipping Address
                 </h4>
                 <div class="grid grid-cols-1 gap-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <input
+                            class="p-2 border rounded w-full"
+                            type="text"
+                            placeholder="First Name"
+                            bind:value={shippingAddress.firstName}
+                        />
+                        <input
+                            class="p-2 border rounded w-full"
+                            type="text"
+                            placeholder="Last Name"
+                            bind:value={shippingAddress.lastName}
+                        />
+                    </div>
                     <div class="grid grid-cols-4 gap-4">
                         <input
                             class="p-2 border rounded col-span-1"
@@ -456,7 +541,10 @@
                     </div>
                 </div>
             </div>
-            <div bind:this={adyenContainer} class="adyen-container"></div>
+            <div
+                bind:this={adyenContainer}
+                class="adyen-container max-w-sm mx-auto"
+            ></div>
         {/if}
 
         <div

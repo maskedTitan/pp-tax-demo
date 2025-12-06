@@ -9,15 +9,16 @@ import { env } from '$env/dynamic/private';
 export async function POST({ request, url }) {
     try {
         const body = await request.json();
-        const { data, recurring, deliveryAddress, lockAddress } = body; // state.data from frontend
+        const { data, recurring, deliveryAddress, lockAddress, shopperName } = body; // state.data from frontend
 
         const paymentRequest = {
             amount: { currency: "USD", value: 1000 },
             reference: `YOUR_ORDER_NUMBER_${Date.now()}`,
             paymentMethod: data.paymentMethod,
-            returnUrl: "http://localhost:5173/adyen",
-            merchantAccount: env.ADYEN_MERCHANT_ACCOUNT || process.env.ADYEN_MERCHANT_ACCOUNT,
+            returnUrl: "http://localhost:5173/adyen", // Redirect handling
+            merchantAccount: env.ADYEN_MERCHANT_ACCOUNT,
             channel: "Web", // Required for Adyen
+            shopperName: shopperName, // { firstName: "...", lastName: "..." }
             browserInfo: data.browserInfo, // Important for 3DS/Fraud
         };
 
