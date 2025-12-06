@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { adyenRequest } from '$lib/server/adyen.js';
+import { env } from '$env/dynamic/private';
 
 /**
  * POST /api/adyen/payments
@@ -15,7 +16,7 @@ export async function POST({ request, url }) {
             reference: `YOUR_ORDER_NUMBER_${Date.now()}`,
             paymentMethod: data.paymentMethod,
             returnUrl: "http://localhost:5173/adyen",
-            merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT || "HarshaMarriNCSUIndustriesECOM",
+            merchantAccount: env.ADYEN_MERCHANT_ACCOUNT || process.env.ADYEN_MERCHANT_ACCOUNT,
             channel: "Web", // Required for Adyen
             browserInfo: data.browserInfo, // Important for 3DS/Fraud
         };

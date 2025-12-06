@@ -24,7 +24,7 @@
     let showJson = false;
 
     // Placeholder configuration - in a real app these come from backend
-    const clientKey = "test_EQLDSUOVRNFJBEKV7WVO73OBZMSMNEDD";
+    const clientKey = import.meta.env.VITE_ADYEN_CLIENT_KEY;
     const environment = "test";
 
     onMount(async () => {
