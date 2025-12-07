@@ -20,6 +20,10 @@ export async function POST({ request, url }) {
             channel: "Web", // Required for Adyen
             shopperName: shopperName, // { firstName: "...", lastName: "..." }
             browserInfo: data.browserInfo, // Important for 3DS/Fraud
+            captureDelayHours: 168, // Delay capture for manual processing (7 days in hours)
+            additionalData: {
+                "paypal.intent": "authorize", // PayPal AUTHORIZE intent
+            }
         };
 
         if (recurring) {
