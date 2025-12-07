@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from '$env/static/private';
 
-const PAYPAL_API_BASE = 'https://api-m.sandbox.paypal.com';
+const PAYPAL_API_BASE = 'https://api-m.paypal.com'; // PRODUCTION
 
 /**
  * Get PayPal Access Token

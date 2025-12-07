@@ -11,7 +11,7 @@
 	let payerEmail = "";
 
 	// Product details
-	const PRODUCT_SUBTOTAL = "10.00";
+	const PRODUCT_SUBTOTAL = "1.00";
 
 	// Shipping address with prefilled values
 	let shippingAddress = {
@@ -291,26 +291,26 @@
 					<span>📊</span> Dynamic Tax Calculation Demo
 				</p>
 				<p class="text-xs text-purple-800 mb-3">
-					The order starts at <span class="font-bold">$10.00</span> (no
+					The order starts at <span class="font-bold">$1.00</span> (no
 					tax). When you select your shipping address in PayPal, the total
 					updates automatically based on the state.
 				</p>
 				<div class="grid grid-cols-2 gap-2 text-xs">
 					<div class="bg-white/70 rounded-lg p-2 text-center">
 						<span class="text-purple-600 font-semibold">CA</span>
-						<span class="text-slate-600 ml-1">8.5% → $10.85</span>
+						<span class="text-slate-600 ml-1">8.5% → $1.09</span>
 					</div>
 					<div class="bg-white/70 rounded-lg p-2 text-center">
 						<span class="text-purple-600 font-semibold">TX</span>
-						<span class="text-slate-600 ml-1">8.0% → $10.80</span>
+						<span class="text-slate-600 ml-1">8.0% → $1.08</span>
 					</div>
 					<div class="bg-white/70 rounded-lg p-2 text-center">
 						<span class="text-purple-600 font-semibold">FL</span>
-						<span class="text-slate-600 ml-1">7.0% → $10.70</span>
+						<span class="text-slate-600 ml-1">7.0% → $1.07</span>
 					</div>
 					<div class="bg-white/70 rounded-lg p-2 text-center">
 						<span class="text-purple-600 font-semibold">DE</span>
-						<span class="text-slate-600 ml-1">0% → $10.00</span>
+						<span class="text-slate-600 ml-1">0% → $1.00</span>
 					</div>
 				</div>
 			</div>
@@ -628,6 +628,46 @@
 						</p>
 						</div>
 					{/if}
+
+					<!-- Shipping Address -->
+					<div class="mt-4 pt-4 border-t border-emerald-300">
+						<p
+							class="text-sm font-bold text-emerald-900 mb-3 flex items-center gap-2"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-5 w-5 text-emerald-600"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+								/>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+								/>
+							</svg>
+							<span>Shipping Address</span>
+						</p>
+						<div class="bg-white/60 rounded-xl p-4">
+							<p class="text-sm font-semibold text-slate-700">{shippingAddress.name}</p>
+							<p class="text-sm text-slate-600 mt-1">{shippingAddress.address_line_1}</p>
+							{#if shippingAddress.address_line_2}
+								<p class="text-sm text-slate-600">{shippingAddress.address_line_2}</p>
+							{/if}
+							<p class="text-sm text-slate-600">
+								{shippingAddress.admin_area_2}, {shippingAddress.admin_area_1} {shippingAddress.postal_code}
+							</p>
+							<p class="text-sm text-slate-600">{shippingAddress.country_code}</p>
+						</div>
+					</div>
 				</div>
 				{/if}
 

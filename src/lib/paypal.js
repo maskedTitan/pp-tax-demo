@@ -1,7 +1,7 @@
 import { PUBLIC_PAYPAL_CLIENT_ID } from '$env/static/public';
 import { PAYPAL_CLIENT_SECRET } from '$env/static/private';
 
-const PAYPAL_API_BASE = 'https://api-m.sandbox.paypal.com';
+const PAYPAL_API_BASE = 'https://api-m.paypal.com'; // PRODUCTION
 
 /**
  * Get PayPal access token using client credentials
