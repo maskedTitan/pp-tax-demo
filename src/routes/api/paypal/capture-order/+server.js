@@ -7,13 +7,13 @@ import { capturePayPalOrder } from '$lib/paypal.js';
  */
 export async function POST({ request }) {
 	try {
-		const { orderId } = await request.json();
+		const { orderId, isProduction } = await request.json();
 
 		if (!orderId) {
 			return json({ error: 'Order ID is required' }, { status: 400 });
 		}
 
-		const captureData = await capturePayPalOrder(orderId);
+		const captureData = await capturePayPalOrder(orderId, isProduction || false);
 
 		// Extract vault ID if payment method was vaulted
 		const vaultId =

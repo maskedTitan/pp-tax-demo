@@ -8,7 +8,7 @@ import { calculateTax, calculateTotal } from '$lib/taxRates.js';
  */
 export async function POST({ request }) {
 	try {
-		const { orderId, subtotal, stateCode } = await request.json();
+		const { orderId, subtotal, stateCode, isProduction } = await request.json();
 
 		if (!orderId || !subtotal) {
 			return json({ error: 'Order ID and subtotal are required' }, { status: 400 });
@@ -41,7 +41,7 @@ export async function POST({ request }) {
 		];
 
 		// Update the order via PayPal API
-		await updatePayPalOrder(orderId, patchData);
+		await updatePayPalOrder(orderId, patchData, isProduction || false);
 
 		return json({
 			success: true,

@@ -1,15 +1,37 @@
-import { PUBLIC_PAYPAL_CLIENT_ID } from '$env/static/public';
-import { PAYPAL_CLIENT_SECRET } from '$env/static/private';
+import { PUBLIC_PAYPAL_CLIENT_ID, PUBLIC_PAYPAL_PROD_CLIENT_ID } from '$env/static/public';
+import { PAYPAL_CLIENT_SECRET, PAYPAL_PROD_CLIENT_SECRET } from '$env/static/private';
 
-const PAYPAL_API_BASE = 'https://api-m.paypal.com'; // PRODUCTION
+const PAYPAL_SANDBOX_API = 'https://api-m.sandbox.paypal.com';
+const PAYPAL_PRODUCTION_API = 'https://api-m.paypal.com';
+
+/**
+ * Get API base URL based on environment
+ * @param {boolean} isProduction - Whether to use production environment
+ */
+function getApiBase(isProduction = false) {
+	return isProduction ? PAYPAL_PRODUCTION_API : PAYPAL_SANDBOX_API;
+}
+
+/**
+ * Get credentials based on environment
+ * @param {boolean} isProduction - Whether to use production environment
+ */
+function getCredentials(isProduction = false) {
+	return {
+		clientId: isProduction ? PUBLIC_PAYPAL_PROD_CLIENT_ID : PUBLIC_PAYPAL_CLIENT_ID,
+		clientSecret: isProduction ? PAYPAL_PROD_CLIENT_SECRET : PAYPAL_CLIENT_SECRET
+	};
+}
 
 /**
  * Get PayPal access token using client credentials
+ * @param {boolean} isProduction - Whether to use production environment
  */
-export async function getPayPalAccessToken() {
-	const auth = Buffer.from(`${PUBLIC_PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
+export async function getPayPalAccessToken(isProduction = false) {
+	const { clientId, clientSecret } = getCredentials(isProduction);
+	const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
-	const response = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, {
+	const response = await fetch(`${getApiBase(isProduction)}/v1/oauth2/token`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded',
@@ -29,11 +51,13 @@ export async function getPayPalAccessToken() {
 
 /**
  * Create a PayPal order
+ * @param {object} orderData - Order data
+ * @param {boolean} isProduction - Whether to use production environment
  */
-export async function createPayPalOrder(orderData) {
-	const accessToken = await getPayPalAccessToken();
+export async function createPayPalOrder(orderData, isProduction = false) {
+	const accessToken = await getPayPalAccessToken(isProduction);
 
-	const response = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders`, {
+	const response = await fetch(`${getApiBase(isProduction)}/v2/checkout/orders`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
@@ -52,11 +76,14 @@ export async function createPayPalOrder(orderData) {
 
 /**
  * Update a PayPal order (PATCH)
+ * @param {string} orderId - Order ID
+ * @param {object} patchData - Patch data
+ * @param {boolean} isProduction - Whether to use production environment
  */
-export async function updatePayPalOrder(orderId, patchData) {
-	const accessToken = await getPayPalAccessToken();
+export async function updatePayPalOrder(orderId, patchData, isProduction = false) {
+	const accessToken = await getPayPalAccessToken(isProduction);
 
-	const response = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders/${orderId}`, {
+	const response = await fetch(`${getApiBase(isProduction)}/v2/checkout/orders/${orderId}`, {
 		method: 'PATCH',
 		headers: {
 			'Content-Type': 'application/json',
@@ -76,11 +103,13 @@ export async function updatePayPalOrder(orderId, patchData) {
 
 /**
  * Capture payment for an order
+ * @param {string} orderId - Order ID
+ * @param {boolean} isProduction - Whether to use production environment
  */
-export async function capturePayPalOrder(orderId) {
-	const accessToken = await getPayPalAccessToken();
+export async function capturePayPalOrder(orderId, isProduction = false) {
+	const accessToken = await getPayPalAccessToken(isProduction);
 
-	const response = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders/${orderId}/capture`, {
+	const response = await fetch(`${getApiBase(isProduction)}/v2/checkout/orders/${orderId}/capture`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
@@ -98,11 +127,13 @@ export async function capturePayPalOrder(orderId) {
 
 /**
  * Get PayPal order details
+ * @param {string} orderId - Order ID
+ * @param {boolean} isProduction - Whether to use production environment
  */
-export async function getPayPalOrder(orderId) {
-	const accessToken = await getPayPalAccessToken();
+export async function getPayPalOrder(orderId, isProduction = false) {
+	const accessToken = await getPayPalAccessToken(isProduction);
 
-	const response = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders/${orderId}`, {
+	const response = await fetch(`${getApiBase(isProduction)}/v2/checkout/orders/${orderId}`, {
 		method: 'GET',
 		headers: {
 			'Content-Type': 'application/json',

@@ -1,7 +1,7 @@
 <script>
 	import { onMount } from "svelte";
 	import { loadScript } from "@paypal/paypal-js";
-	import { PUBLIC_PAYPAL_CLIENT_ID } from "$env/static/public";
+	import { PUBLIC_PAYPAL_PROD_CLIENT_ID } from "$env/static/public";
 	import { calculateTax, calculateTotal, getTaxRate } from "$lib/taxRates.js";
 
 	let paypalButtonsContainer;
@@ -38,9 +38,16 @@
 	$: currentTaxRate = getTaxRate(shippingAddress.admin_area_1);
 
 	onMount(async () => {
+		// Check if production credentials are configured
+		if (!PUBLIC_PAYPAL_PROD_CLIENT_ID || PUBLIC_PAYPAL_PROD_CLIENT_ID === 'YOUR_PRODUCTION_CLIENT_ID_HERE') {
+			errorMessage = "Production PayPal credentials not configured. Please set PUBLIC_PAYPAL_PROD_CLIENT_ID in your environment variables.";
+			console.error("Production credentials missing. Check VERCEL_SETUP.md for setup instructions.");
+			return;
+		}
+
 		try {
 			const paypal = await loadScript({
-				clientId: PUBLIC_PAYPAL_CLIENT_ID,
+				clientId: PUBLIC_PAYPAL_PROD_CLIENT_ID,
 				currency: "USD",
 				enableFunding: "venmo",
 			});
@@ -68,6 +75,7 @@
 												shippingPreference,
 											initial_state:
 												shippingAddress.admin_area_1,
+											isProduction: true,
 										}),
 									},
 								);
@@ -115,6 +123,7 @@
 									orderId: data.orderID,
 									subtotal: PRODUCT_SUBTOTAL,
 									stateCode: stateCode,
+									isProduction: true,
 								}),
 							})
 								.then((response) => response.json())
@@ -145,6 +154,7 @@
 										},
 										body: JSON.stringify({
 											orderId: data.orderID,
+											isProduction: true,
 										}),
 									},
 								);
@@ -704,39 +714,28 @@
 
 	<!-- Footer -->
 	<div
-		class="bg-gradient-to-r from-slate-800 to-slate-900 text-white py-8 mt-8"
+		class="bg-gradient-to-r from-red-800 to-red-900 text-white py-8 mt-8"
 	>
 		<div class="container mx-auto px-8 max-w-2xl">
 			<div class="text-center space-y-3">
 				<div
-					class="inline-flex items-center gap-2 bg-amber-500/20 text-amber-300 px-4 py-2 rounded-full text-sm font-semibold"
+					class="inline-flex items-center gap-2 bg-red-500/30 text-red-100 px-4 py-2 rounded-full text-sm font-semibold"
 				>
-					<span>⚙️</span> Sandbox Environment - Test Mode
+					<span>🔴</span> PRODUCTION Environment - LIVE MODE
 				</div>
-				<p class="text-slate-300 text-sm">
-					Use PayPal sandbox credentials to test the checkout. <a href="/prod" class="underline font-semibold hover:text-white">Go to Production Mode</a>
+				<p class="text-red-100 text-sm">
+					This uses real PayPal production credentials. Real transactions will be processed!
 				</p>
 			</div>
 			<div
-				class="mt-6 p-5 bg-slate-700/50 border border-slate-600 rounded-xl text-left max-w-xl mx-auto"
+				class="mt-6 p-5 bg-red-700/50 border border-red-600 rounded-xl text-left max-w-xl mx-auto"
 			>
 				<p class="font-bold text-white mb-3 flex items-center gap-2">
-					<span>📋</span> How to Test Dynamic Tax
+					<span>⚠️</span> Production Mode Warning
 				</p>
-				<ol
-					class="list-decimal list-inside space-y-2 text-sm text-slate-300"
-				>
-					<li>Click the PayPal button above</li>
-					<li>Log in with your sandbox account</li>
-					<li>Select or change your shipping address</li>
-					<li>
-						Watch the total amount update based on the selected
-						state
-					</li>
-					<li>
-						Try different states to see different tax calculations
-					</li>
-				</ol>
+				<p class="text-sm text-red-100">
+					You are using production PayPal credentials. Any payments made here will be real and will process actual charges. Use with caution!
+				</p>
 			</div>
 		</div>
 	</div>

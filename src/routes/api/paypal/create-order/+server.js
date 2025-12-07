@@ -9,6 +9,7 @@ import { calculateTax, calculateTotal } from '$lib/taxRates.js';
 export async function POST({ request }) {
 	try {
 		const body = await request.json();
+		const isProduction = body.isProduction || false;
 
 		// Get the origin from the request headers for return/cancel URLs
 		const origin = request.headers.get('origin') || 'http://localhost:5173';
@@ -92,7 +93,7 @@ export async function POST({ request }) {
 			}
 		};
 
-		const order = await createPayPalOrder(orderData);
+		const order = await createPayPalOrder(orderData, isProduction);
 
 		return json({
 			id: order.id,
