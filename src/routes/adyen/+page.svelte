@@ -10,10 +10,11 @@
     // New Features State
     let isRecurring = true;
     let lockAddress = false;
+    let useServiceAddress = true;
     let currentPaymentData = null;
     let currentPspReference = null;
     let paypalOrderId = null;
-    let shippingAddress = {
+    let serviceAddress = {
         firstName: "John",
         lastName: "Doe",
         houseNumberOrName: "123",
@@ -145,13 +146,14 @@
                     component.setStatus("loading");
 
                     // Only Initialize final address with form data IF it hasn't been updated by PayPal events
-                    if (!finalShippingAddress) {
+                    // And only if we are using the service address
+                    if (!finalShippingAddress && useServiceAddress) {
                         finalShippingAddress = {
-                            street: `${shippingAddress.houseNumberOrName} ${shippingAddress.street}`,
-                            city: shippingAddress.city,
-                            state: shippingAddress.stateOrProvince,
-                            postalCode: shippingAddress.postalCode,
-                            countryCode: shippingAddress.country,
+                            street: `${serviceAddress.houseNumberOrName} ${serviceAddress.street}`,
+                            city: serviceAddress.city,
+                            state: serviceAddress.stateOrProvince,
+                            postalCode: serviceAddress.postalCode,
+                            countryCode: serviceAddress.country,
                         };
                     }
 
@@ -159,22 +161,24 @@
                         const payload = {
                             data: state.data,
                             recurring: isRecurring,
-                            lockAddress: lockAddress, // Pass preference to backend
-                            shopperName: {
-                                firstName: shippingAddress.firstName,
-                                lastName: shippingAddress.lastName,
-                            },
-                            deliveryAddress: {
-                                street: shippingAddress.street,
-                                houseNumberOrName:
-                                    shippingAddress.houseNumberOrName,
-                                city: shippingAddress.city,
-                                stateOrProvince:
-                                    shippingAddress.stateOrProvince,
-                                postalCode: shippingAddress.postalCode,
-                                country: shippingAddress.country,
-                            },
+                            lockAddress: lockAddress && useServiceAddress, // Only lock if we are sending an address
                         };
+
+                        if (useServiceAddress) {
+                            payload.shopperName = {
+                                firstName: serviceAddress.firstName,
+                                lastName: serviceAddress.lastName,
+                            };
+                            payload.deliveryAddress = {
+                                street: serviceAddress.street,
+                                houseNumberOrName:
+                                    serviceAddress.houseNumberOrName,
+                                city: serviceAddress.city,
+                                stateOrProvince: serviceAddress.stateOrProvince,
+                                postalCode: serviceAddress.postalCode,
+                                country: serviceAddress.country,
+                            };
+                        }
 
                         const response = await fetch("/api/adyen/payments", {
                             method: "POST",
@@ -193,13 +197,11 @@
                             if (result.action.paymentData) {
                                 currentPaymentData = result.action.paymentData;
                             }
-                            // Store pspReference if available (needed for updates)
                             if (result.pspReference) {
                                 currentPspReference = result.pspReference;
                             }
                             component.handleAction(result.action);
                         } else {
-                            // Show success/result
                             component.setStatus("ready");
                             paymentSuccess = true;
                             paymentResult = result;
@@ -210,6 +212,7 @@
                         alert("Payment Error: " + error.message);
                     }
                 },
+
                 onAdditionalDetails: async (state, component) => {
                     console.log("PayPal Additional Details:", state.data);
                     component.setStatus("loading");
@@ -242,32 +245,6 @@
                         if (result.action) {
                             component.handleAction(result.action);
                         } else {
-                            // Update final address from the authoritative result
-                            console.log(
-                                "[DEBUG] Address State BEFORE Adyen Result Check:",
-                                finalShippingAddress,
-                            );
-                            if (result.deliveryAddress) {
-                                console.log(
-                                    "[DEBUG] Overwriting with result.deliveryAddress:",
-                                    result.deliveryAddress,
-                                );
-                                finalShippingAddress = result.deliveryAddress;
-                            } else if (
-                                result.additionalData &&
-                                result.additionalData.deliveryAddress
-                            ) {
-                                // ... existing logic ...
-                                console.log(
-                                    "[DEBUG] Overwriting with additionalData.deliveryAddress",
-                                );
-                                // ...
-                            }
-                            console.log(
-                                "[DEBUG] Address State AFTER Adyen Result Check:",
-                                finalShippingAddress,
-                            );
-
                             // Show success/result
                             component.setStatus("ready");
                             paymentSuccess = true;
@@ -301,30 +278,21 @@
                                             ppAddress,
                                         );
 
-                                        // Compare with current finalShippingAddress?
-                                        // For now, let's just log and see if this IS the overwrite culprit
-
                                         // Update display with high-fidelity address
                                         finalShippingAddress = {
                                             street: ppAddress.address_line_1,
-                                            // Combine line 2 if present
                                             line2: ppAddress.address_line_2,
                                             city: ppAddress.admin_area_2,
                                             state: ppAddress.admin_area_1,
                                             postalCode: ppAddress.postal_code,
                                             countryCode: ppAddress.country_code,
                                         };
-                                        console.log(
-                                            "[DEBUG] Address State AFTER Fetch Update:",
-                                            finalShippingAddress,
-                                        );
                                     }
                                 } catch (err) {
                                     console.error(
                                         "Failed to fetch full PayPal address:",
                                         err,
                                     );
-                                    // Fallback to whatever Adyen gave us (already in finalShippingAddress) is fine
                                 }
                             }
                         }
@@ -334,6 +302,7 @@
                         alert("Payment Details Error: " + error.message);
                     }
                 },
+
                 onCancel: (data, component) => {
                     console.log("PayPal Cancelled:", data);
                 },
@@ -360,422 +329,504 @@
             <!-- Left Column: Forms and Options -->
             <div class="space-y-6">
                 {#if !paymentSuccess}
-                <!-- Checkout Options -->
-                <div
-                    class="mb-6 p-5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200/50 shadow-sm"
-                >
-                    <div class="flex items-center gap-2 mb-4">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            class="h-5 w-5 text-purple-600"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-                            />
-                        </svg>
-                        <h3 class="font-bold text-slate-800 text-lg">Checkout Options</h3>
-                    </div>
-
-                    <!-- Recurring Checkbox -->
-                    <div class="space-y-3">
-                        <label
-                            class="flex items-start p-4 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors"
-                        >
-                            <input
-                                type="checkbox"
-                                id="recurring"
-                                bind:checked={isRecurring}
-                                class="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 border-slate-300 mt-0.5"
-                            />
-                            <div class="ml-3">
-                                <span class="font-semibold text-slate-800"
-                                    >Subscribe (Recurring Payment)</span
-                                >
-                                <p class="text-xs text-slate-500 mt-1">
-                                    Save payment details for future automatic payments
-                                </p>
-                            </div>
-                        </label>
-
-                        <!-- Lock Address Checkbox -->
-                        <label
-                            class="flex items-start p-4 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors"
-                        >
-                            <input
-                                type="checkbox"
-                                id="lockAddress"
-                                bind:checked={lockAddress}
-                                class="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 border-slate-300 mt-0.5"
-                            />
-                            <div class="ml-3">
-                                <span class="font-semibold text-slate-800"
-                                    >Lock Address in PayPal (Pre-fill)</span
-                                >
-                                <p class="text-xs text-slate-500 mt-1">
-                                    Uncheck to allow editing address in PayPal popup
-                                </p>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Shipping Address Form -->
-                <div
-                    class="mb-6 p-5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200/50 shadow-sm"
-                >
-                    <div class="flex items-center gap-2 mb-4">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            class="h-5 w-5 text-orange-600"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                            />
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                            />
-                        </svg>
-                        <h4 class="font-bold text-slate-800 text-lg">Shipping Address</h4>
-                    </div>
-                    <div class="grid grid-cols-1 gap-4">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label
-                                    for="firstName"
-                                    class="block text-sm font-semibold text-slate-700 mb-2"
-                                    >First Name</label
-                                >
-                                <input
-                                    id="firstName"
-                                    class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
-                                    type="text"
-                                    placeholder="John"
-                                    bind:value={shippingAddress.firstName}
-                                />
-                            </div>
-                            <div>
-                                <label
-                                    for="lastName"
-                                    class="block text-sm font-semibold text-slate-700 mb-2"
-                                    >Last Name</label
-                                >
-                                <input
-                                    id="lastName"
-                                    class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
-                                    type="text"
-                                    placeholder="Doe"
-                                    bind:value={shippingAddress.lastName}
-                                />
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-4 gap-4">
-                            <div>
-                                <label
-                                    for="houseNumber"
-                                    class="block text-sm font-semibold text-slate-700 mb-2"
-                                    >Number</label
-                                >
-                                <input
-                                    id="houseNumber"
-                                    class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
-                                    type="text"
-                                    placeholder="123"
-                                    bind:value={shippingAddress.houseNumberOrName}
-                                />
-                            </div>
-                            <div class="col-span-3">
-                                <label
-                                    for="street"
-                                    class="block text-sm font-semibold text-slate-700 mb-2"
-                                    >Street Name</label
-                                >
-                                <input
-                                    id="street"
-                                    class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
-                                    type="text"
-                                    placeholder="Rocket Rd"
-                                    bind:value={shippingAddress.street}
-                                />
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label
-                                    for="city"
-                                    class="block text-sm font-semibold text-slate-700 mb-2"
-                                    >City</label
-                                >
-                                <input
-                                    id="city"
-                                    class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
-                                    type="text"
-                                    placeholder="Hawthorne"
-                                    bind:value={shippingAddress.city}
-                                />
-                            </div>
-                            <div>
-                                <label
-                                    for="postalCode"
-                                    class="block text-sm font-semibold text-slate-700 mb-2"
-                                    >Postal Code</label
-                                >
-                                <input
-                                    id="postalCode"
-                                    class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
-                                    type="text"
-                                    placeholder="90250"
-                                    bind:value={shippingAddress.postalCode}
-                                />
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label
-                                    for="state"
-                                    class="block text-sm font-semibold text-slate-700 mb-2"
-                                    >State / Province</label
-                                >
-                                <input
-                                    id="state"
-                                    class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50 uppercase"
-                                    type="text"
-                                    placeholder="CA"
-                                    maxlength="2"
-                                    bind:value={shippingAddress.stateOrProvince}
-                                />
-                            </div>
-                            <div>
-                                <label
-                                    for="country"
-                                    class="block text-sm font-semibold text-slate-700 mb-2"
-                                    >Country</label
-                                >
-                                <input
-                                    id="country"
-                                    class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50 uppercase"
-                                    type="text"
-                                    placeholder="US"
-                                    maxlength="2"
-                                    bind:value={shippingAddress.country}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <p
-                        class="text-xs text-slate-500 mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200/50"
+                    <!-- Checkout Options -->
+                    <div
+                        class="mb-6 p-5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200/50 shadow-sm"
                     >
-                        ℹ️ This address will be prefilled in PayPal checkout (if lock address is enabled).
-                    </p>
-                </div>
+                        <div class="flex items-center gap-2 mb-4">
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                class="h-5 w-5 text-purple-600"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                                />
+                            </svg>
+                            <h3 class="font-bold text-slate-800 text-lg">
+                                Checkout Options
+                            </h3>
+                        </div>
+
+                        <!-- Recurring Checkbox -->
+                        <div class="space-y-3">
+                            <label
+                                class="flex items-start p-4 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors"
+                            >
+                                <input
+                                    type="checkbox"
+                                    id="recurring"
+                                    bind:checked={isRecurring}
+                                    class="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 border-slate-300 mt-0.5"
+                                />
+                                <div class="ml-3">
+                                    <span class="font-semibold text-slate-800"
+                                        >Subscribe (Recurring Payment)</span
+                                    >
+                                    <p class="text-xs text-slate-500 mt-1">
+                                        Save payment details for future
+                                        automatic payments
+                                    </p>
+                                </div>
+                            </label>
+
+                            <!-- Toggle Service Address -->
+                            <label
+                                class="flex items-start p-4 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors"
+                            >
+                                <input
+                                    type="checkbox"
+                                    id="useServiceAddress"
+                                    bind:checked={useServiceAddress}
+                                    class="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 border-slate-300 mt-0.5"
+                                />
+                                <div class="ml-3">
+                                    <span class="font-semibold text-slate-800"
+                                        >Include Service Address</span
+                                    >
+                                    <p class="text-xs text-slate-500 mt-1">
+                                        Prefill the address in PayPal
+                                    </p>
+                                </div>
+                            </label>
+
+                            {#if useServiceAddress}
+                                <!-- Lock Address Checkbox -->
+                                <label
+                                    class="flex items-start p-4 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        id="lockAddress"
+                                        bind:checked={lockAddress}
+                                        class="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 border-slate-300 mt-0.5"
+                                    />
+                                    <div class="ml-3">
+                                        <span
+                                            class="font-semibold text-slate-800"
+                                            >Lock Address in PayPal</span
+                                        >
+                                        <p class="text-xs text-slate-500 mt-1">
+                                            Uncheck to allow editing address in
+                                            PayPal popup
+                                        </p>
+                                    </div>
+                                </label>
+                            {/if}
+                        </div>
+                    </div>
+
+                    {#if useServiceAddress}
+                        <!-- Service Address Form -->
+                        <div
+                            class="mb-6 p-5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200/50 shadow-sm"
+                        >
+                            <div class="flex items-center gap-2 mb-4">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    class="h-5 w-5 text-orange-600"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                    />
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                                    />
+                                </svg>
+                                <h4 class="font-bold text-slate-800 text-lg">
+                                    Service Address
+                                </h4>
+                            </div>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label
+                                            for="firstName"
+                                            class="block text-sm font-semibold text-slate-700 mb-2"
+                                            >First Name</label
+                                        >
+                                        <input
+                                            id="firstName"
+                                            class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
+                                            type="text"
+                                            placeholder="John"
+                                            bind:value={
+                                                serviceAddress.firstName
+                                            }
+                                        />
+                                    </div>
+                                    <div>
+                                        <label
+                                            for="lastName"
+                                            class="block text-sm font-semibold text-slate-700 mb-2"
+                                            >Last Name</label
+                                        >
+                                        <input
+                                            id="lastName"
+                                            class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
+                                            type="text"
+                                            placeholder="Doe"
+                                            bind:value={serviceAddress.lastName}
+                                        />
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-4 gap-4">
+                                    <div>
+                                        <label
+                                            for="houseNumber"
+                                            class="block text-sm font-semibold text-slate-700 mb-2"
+                                            >Number</label
+                                        >
+                                        <input
+                                            id="houseNumber"
+                                            class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
+                                            type="text"
+                                            placeholder="123"
+                                            bind:value={
+                                                serviceAddress.houseNumberOrName
+                                            }
+                                        />
+                                    </div>
+                                    <div class="col-span-3">
+                                        <label
+                                            for="street"
+                                            class="block text-sm font-semibold text-slate-700 mb-2"
+                                            >Street Name</label
+                                        >
+                                        <input
+                                            id="street"
+                                            class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
+                                            type="text"
+                                            placeholder="Rocket Rd"
+                                            bind:value={serviceAddress.street}
+                                        />
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label
+                                            for="city"
+                                            class="block text-sm font-semibold text-slate-700 mb-2"
+                                            >City</label
+                                        >
+                                        <input
+                                            id="city"
+                                            class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
+                                            type="text"
+                                            placeholder="Hawthorne"
+                                            bind:value={serviceAddress.city}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label
+                                            for="postalCode"
+                                            class="block text-sm font-semibold text-slate-700 mb-2"
+                                            >Postal Code</label
+                                        >
+                                        <input
+                                            id="postalCode"
+                                            class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50"
+                                            type="text"
+                                            placeholder="90250"
+                                            bind:value={
+                                                serviceAddress.postalCode
+                                            }
+                                        />
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label
+                                            for="state"
+                                            class="block text-sm font-semibold text-slate-700 mb-2"
+                                            >State / Province</label
+                                        >
+                                        <input
+                                            id="state"
+                                            class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50 uppercase"
+                                            type="text"
+                                            placeholder="CA"
+                                            maxlength="2"
+                                            bind:value={
+                                                serviceAddress.stateOrProvince
+                                            }
+                                        />
+                                    </div>
+                                    <div>
+                                        <label
+                                            for="country"
+                                            class="block text-sm font-semibold text-slate-700 mb-2"
+                                            >Country</label
+                                        >
+                                        <input
+                                            id="country"
+                                            class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white hover:bg-slate-50 uppercase"
+                                            type="text"
+                                            placeholder="US"
+                                            maxlength="2"
+                                            bind:value={serviceAddress.country}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <p
+                                class="text-xs text-slate-500 mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200/50"
+                            >
+                                ℹ️ This address will be prefilled in PayPal
+                                checkout (if lock address is enabled).
+                            </p>
+                        </div>
+                    {/if}
                 {/if}
             </div>
 
             <!-- Right Column: Payment and Messages -->
             <div class="space-y-6">
                 {#if !paymentSuccess}
-                <!-- PayPal Button Container -->
-                <div
-                    class="p-5 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200/50 shadow-sm sticky top-6"
-                >
-                    <div class="flex items-center gap-2 mb-4">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            class="h-5 w-5 text-purple-600"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                            />
-                        </svg>
-                        <h4 class="font-bold text-slate-800 text-lg">Complete Payment</h4>
-                    </div>
+                    <!-- PayPal Button Container -->
                     <div
-                        bind:this={adyenContainer}
-                        class="adyen-container max-w-sm mx-auto"
-                    ></div>
-                </div>
-
-                {#if errorMessage}
-                <div
-                    class="bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-400 rounded-2xl p-6 shadow-lg"
-                >
-                    <div class="flex items-center gap-3">
-                        <div class="bg-red-500 text-white rounded-full p-2">
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="h-6 w-6"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M6 18L18 6M6 6l12 12"
-                                />
-                            </svg>
-                        </div>
-                        <p class="text-lg font-semibold text-red-800">
-                            {errorMessage}
-                        </p>
-                    </div>
-                </div>
-                {/if}
-                {:else}
-                <!-- Success Message -->
-                <div
-                    class="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-400 rounded-2xl p-6 shadow-lg"
-                >
-                    <div class="flex items-center gap-3 mb-4">
-                        <div class="bg-emerald-500 text-white rounded-full p-2">
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="h-6 w-6"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M5 13l4 4L19 7"
-                                />
-                            </svg>
-                        </div>
-                        <div>
-                            <h3 class="font-bold text-xl text-emerald-800">
-                                Payment Successful!
-                            </h3>
-                            <p class="text-sm text-emerald-700">Thank you for your order.</p>
-                        </div>
-                    </div>
-                    <div
-                        class="p-5 bg-white/80 rounded-xl shadow-inner border border-emerald-200"
+                        class="p-5 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200/50 shadow-sm sticky top-6"
                     >
-                        <div class="space-y-3 text-sm">
-                            <div class="flex justify-between items-center pb-2 border-b border-slate-200">
-                                <span class="font-semibold text-slate-700">Merchant Reference:</span>
-                                <code class="bg-slate-100 px-3 py-1 rounded-lg font-mono text-xs">
-                                    {paymentResult.merchantReference}
-                                </code>
-                            </div>
-                            <div class="flex justify-between items-center pb-2 border-b border-slate-200">
-                                <span class="font-semibold text-slate-700">PSP Reference:</span>
-                                <code class="bg-slate-100 px-3 py-1 rounded-lg font-mono text-xs">
-                                    {paymentResult.pspReference}
-                                </code>
-                            </div>
-                            <div class="flex justify-between items-center pb-2 border-b border-slate-200">
-                                <span class="font-semibold text-slate-700">Result Code:</span>
-                                <span class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg font-semibold text-xs">
-                                    {paymentResult.resultCode}
-                                </span>
-                            </div>
+                        <div class="flex items-center gap-2 mb-4">
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                class="h-5 w-5 text-purple-600"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                                />
+                            </svg>
+                            <h4 class="font-bold text-slate-800 text-lg">
+                                Complete Payment
+                            </h4>
+                        </div>
+                        <div
+                            bind:this={adyenContainer}
+                            class="adyen-container max-w-sm mx-auto"
+                        ></div>
+                    </div>
 
-                            {#if finalShippingAddress}
-                                <div class="mt-4 pt-3 border-t-2 border-emerald-200">
-                                    <div class="flex items-center gap-2 mb-3">
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            class="h-5 w-5 text-emerald-600"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
+                    {#if errorMessage}
+                        <div
+                            class="bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-400 rounded-2xl p-6 shadow-lg"
+                        >
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="bg-red-500 text-white rounded-full p-2"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        class="h-6 w-6"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12"
+                                        />
+                                    </svg>
+                                </div>
+                                <p class="text-lg font-semibold text-red-800">
+                                    {errorMessage}
+                                </p>
+                            </div>
+                        </div>
+                    {/if}
+                {:else}
+                    <!-- Success Message -->
+                    <div
+                        class="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-400 rounded-2xl p-6 shadow-lg"
+                    >
+                        <div class="flex items-center gap-3 mb-4">
+                            <div
+                                class="bg-emerald-500 text-white rounded-full p-2"
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    class="h-6 w-6"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M5 13l4 4L19 7"
+                                    />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-xl text-emerald-800">
+                                    Payment Successful!
+                                </h3>
+                                <p class="text-sm text-emerald-700">
+                                    Thank you for your order.
+                                </p>
+                            </div>
+                        </div>
+                        <div
+                            class="p-5 bg-white/80 rounded-xl shadow-inner border border-emerald-200"
+                        >
+                            <div class="space-y-3 text-sm">
+                                <div
+                                    class="flex justify-between items-center pb-2 border-b border-slate-200"
+                                >
+                                    <span class="font-semibold text-slate-700"
+                                        >Merchant Reference:</span
+                                    >
+                                    <code
+                                        class="bg-slate-100 px-3 py-1 rounded-lg font-mono text-xs"
+                                    >
+                                        {paymentResult.merchantReference}
+                                    </code>
+                                </div>
+                                <div
+                                    class="flex justify-between items-center pb-2 border-b border-slate-200"
+                                >
+                                    <span class="font-semibold text-slate-700"
+                                        >PSP Reference:</span
+                                    >
+                                    <code
+                                        class="bg-slate-100 px-3 py-1 rounded-lg font-mono text-xs"
+                                    >
+                                        {paymentResult.pspReference}
+                                    </code>
+                                </div>
+                                <div
+                                    class="flex justify-between items-center pb-2 border-b border-slate-200"
+                                >
+                                    <span class="font-semibold text-slate-700"
+                                        >Result Code:</span
+                                    >
+                                    <span
+                                        class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg font-semibold text-xs"
+                                    >
+                                        {paymentResult.resultCode}
+                                    </span>
+                                </div>
+
+                                {#if finalShippingAddress}
+                                    <div
+                                        class="mt-4 pt-3 border-t-2 border-emerald-200"
+                                    >
+                                        <div
+                                            class="flex items-center gap-2 mb-3"
                                         >
-                                            <path
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                                stroke-width="2"
-                                                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                                            />
-                                            <path
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                                stroke-width="2"
-                                                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                                            />
-                                        </svg>
-                                        <strong class="text-slate-800">Shipping Address:</strong>
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                class="h-5 w-5 text-emerald-600"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                                />
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                                                />
+                                            </svg>
+                                            <strong class="text-slate-800"
+                                                >Shipping Address:</strong
+                                            >
+                                        </div>
+                                        <div
+                                            class="bg-slate-50 rounded-lg p-4 text-slate-700"
+                                        >
+                                            <p class="font-medium">
+                                                {finalShippingAddress.street ||
+                                                    finalShippingAddress.line1 ||
+                                                    ""}
+                                                {finalShippingAddress.line2
+                                                    ? `, ${finalShippingAddress.line2}`
+                                                    : ""}
+                                            </p>
+                                            <p>
+                                                {finalShippingAddress.city}, {finalShippingAddress.state}
+                                            </p>
+                                            <p>
+                                                {finalShippingAddress.postalCode}
+                                            </p>
+                                            <p class="font-semibold">
+                                                {finalShippingAddress.countryCode}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div class="bg-slate-50 rounded-lg p-4 text-slate-700">
-                                        <p class="font-medium">
-                                            {finalShippingAddress.street ||
-                                                finalShippingAddress.line1 ||
-                                                ""}
-                                            {finalShippingAddress.line2
-                                                ? `, ${finalShippingAddress.line2}`
-                                                : ""}
-                                        </p>
-                                        <p>
-                                            {finalShippingAddress.city}, {finalShippingAddress.state}
-                                        </p>
-                                        <p>{finalShippingAddress.postalCode}</p>
-                                        <p class="font-semibold">{finalShippingAddress.countryCode}</p>
-                                    </div>
+                                {/if}
+                            </div>
+                        </div>
+                        <button
+                            class="mt-5 w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md hover:shadow-lg"
+                            onclick={() => location.reload()}
+                        >
+                            Place Another Order
+                        </button>
+
+                        <div class="mt-6 pt-4 border-t border-emerald-200">
+                            <button
+                                class="text-sm font-semibold text-purple-600 hover:text-purple-700 hover:underline mb-2 flex items-center gap-2"
+                                onclick={() => (showJson = !showJson)}
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    class="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                                    />
+                                </svg>
+                                {showJson ? "Hide" : "Show"} Raw Adyen Response
+                            </button>
+
+                            {#if showJson}
+                                <div
+                                    class="mt-3 p-4 bg-slate-900 text-emerald-400 rounded-xl text-xs font-mono overflow-x-auto shadow-lg border border-slate-700"
+                                >
+                                    <pre>{JSON.stringify(
+                                            paymentResult,
+                                            null,
+                                            2,
+                                        )}</pre>
                                 </div>
                             {/if}
                         </div>
                     </div>
-                    <button
-                        class="mt-5 w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md hover:shadow-lg"
-                        onclick={() => location.reload()}
-                    >
-                        Place Another Order
-                    </button>
-
-                    <div class="mt-6 pt-4 border-t border-emerald-200">
-                        <button
-                            class="text-sm font-semibold text-purple-600 hover:text-purple-700 hover:underline mb-2 flex items-center gap-2"
-                            onclick={() => (showJson = !showJson)}
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="h-4 w-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-                                />
-                            </svg>
-                            {showJson ? "Hide" : "Show"} Raw Adyen Response
-                        </button>
-
-                        {#if showJson}
-                            <div
-                                class="mt-3 p-4 bg-slate-900 text-emerald-400 rounded-xl text-xs font-mono overflow-x-auto shadow-lg border border-slate-700"
-                            >
-                                <pre>{JSON.stringify(paymentResult, null, 2)}</pre>
-                            </div>
-                        {/if}
-                    </div>
-                </div>
                 {/if}
             </div>
         </div>
@@ -800,16 +851,28 @@
                     />
                 </svg>
                 <div>
-                    <p class="font-bold text-blue-900 mb-2">Implementation Note</p>
-                    <p class="text-sm text-blue-800 mb-2">
-                        This is a demonstration using Adyen's Web Components for PayPal integration.
+                    <p class="font-bold text-blue-900 mb-2">
+                        Implementation Note
                     </p>
-                    <p class="text-sm font-semibold text-blue-900 mb-1">Requirements:</p>
-                    <ul class="list-disc list-inside text-sm text-blue-700 space-y-1 ml-2">
+                    <p class="text-sm text-blue-800 mb-2">
+                        This is a demonstration using Adyen's Web Components for
+                        PayPal integration.
+                    </p>
+                    <p class="text-sm font-semibold text-blue-900 mb-1">
+                        Requirements:
+                    </p>
+                    <ul
+                        class="list-disc list-inside text-sm text-blue-700 space-y-1 ml-2"
+                    >
                         <li>Valid Adyen Client Key configured</li>
                         <li>Server-side /payments endpoint implemented</li>
-                        <li>Server-side /payments/details endpoint implemented</li>
-                        <li>Server-side /payments/update-order endpoint for dynamic updates</li>
+                        <li>
+                            Server-side /payments/details endpoint implemented
+                        </li>
+                        <li>
+                            Server-side /payments/update-order endpoint for
+                            dynamic updates
+                        </li>
                     </ul>
                 </div>
             </div>
