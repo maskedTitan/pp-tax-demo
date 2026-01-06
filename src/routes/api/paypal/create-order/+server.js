@@ -15,7 +15,7 @@ export async function POST({ request }) {
 		const origin = request.headers.get('origin') || 'http://localhost:5173';
 
 		// Build the order data according to PayPal Orders v2 API
-		const subtotal = body.amount || '10.00';
+		const subtotal = body.amount || '1.00';
 
 		// Start with $0 tax - will update via onShippingAddressChange callback
 		const taxAmount = '0.00';
@@ -52,8 +52,9 @@ export async function POST({ request }) {
 			]
 		};
 
-		// Add shipping address if provided
-		if (body.shipping_address) {
+		// Add shipping address if provided AND NOT Venmo
+		// We skip adding the explicit shipping address object for Venmo to strictly follow "GET_FROM_FILE" flow
+		if (body.shipping_address && body.paymentSource !== 'venmo') {
 			purchaseUnit.shipping = {
 				name: {
 					full_name: body.shipping_address.name
@@ -69,19 +70,36 @@ export async function POST({ request }) {
 			};
 		}
 
-		const orderData = {
-			intent: 'CAPTURE',
-			purchase_units: [purchaseUnit],
-			payment_source: {
-				paypal: {
+
+		let paymentSource = {};
+
+		const experienceContext = {
+			brand_name: body.brand_name || 'Your Store',
+			landing_page: 'NO_PREFERENCE',
+			user_action: 'PAY_NOW',
+			shipping_preference: body.shipping_preference || 'SET_PROVIDED_ADDRESS',
+			return_url: body.return_url || `${origin}/`,
+			cancel_url: body.cancel_url || `${origin}/`
+		};
+
+		// If paying with Venmo, we should not enforce a shipping address override if it causes friction,
+		// but providing it as 'SET_PROVIDED_ADDRESS' often works. However, 'GET_FROM_FILE' is safer for Venmo.
+		// For now, we respect the incoming preference but ensure we route to the correct object.
+
+		if (body.paymentSource === 'venmo') {
+			paymentSource = {
+				venmo: {
 					experience_context: {
-						brand_name: body.brand_name || 'Your Store',
-						landing_page: 'NO_PREFERENCE',
-						user_action: 'PAY_NOW',
-						shipping_preference: body.shipping_preference || 'SET_PROVIDED_ADDRESS',
-						return_url: body.return_url || `${origin}/`,
-						cancel_url: body.cancel_url || `${origin}/`
-					},
+						...experienceContext,
+						shipping_preference: 'GET_FROM_FILE'
+					}
+					// Vaulting removed for Venmo to debug error
+				}
+			};
+		} else {
+			paymentSource = {
+				paypal: {
+					experience_context: experienceContext,
 					attributes: {
 						vault: {
 							store_in_vault: 'ON_SUCCESS',
@@ -90,7 +108,13 @@ export async function POST({ request }) {
 						}
 					}
 				}
-			}
+			};
+		}
+
+		const orderData = {
+			intent: 'CAPTURE',
+			purchase_units: [purchaseUnit],
+			payment_source: paymentSource
 		};
 
 		const order = await createPayPalOrder(orderData, isProduction);

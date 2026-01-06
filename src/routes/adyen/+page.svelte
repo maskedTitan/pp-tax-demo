@@ -8,7 +8,7 @@
     let paymentResult = null;
 
     // New Features State
-    let isRecurring = true;
+    let isRecurring = false;
     let lockAddress = false;
     let useServiceAddress = true;
     let currentPaymentData = null;
@@ -63,16 +63,17 @@
                 showPayButton: true,
                 countryCode: "US", // Required for PayPal
                 amount: {
-                    value: 1000,
+                    value: 100, // $1.00
                     currency: "USD",
                 },
                 // Enable Express Checkout flow to allow address updates
                 isExpress: true,
                 blockPayPalCreditButton: true,
-                blockPayPalPayLaterButton: true,
+                blockPayPalPayLaterButton: false,
 
                 // Custom Button Styling
                 style: {
+                    color: "black",
                     height: 48,
                 },
 
@@ -163,9 +164,12 @@
                     }
 
                     try {
+                        const isVenmo =
+                            state.data?.paymentMethod?.type === "venmo";
+
                         const payload = {
                             data: state.data,
-                            recurring: isRecurring,
+                            recurring: isRecurring && !isVenmo, // Disable recurring for Venmo to prevent vaulting errors
                             lockAddress: lockAddress && useServiceAddress, // Only lock if we are sending an address
                         };
 

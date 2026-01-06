@@ -12,6 +12,8 @@ export async function POST({ request }) {
     try {
         const { paymentData, pspReference, shippingAddress } = await request.json();
 
+        console.log("Adyen Update Order - Received Address:", JSON.stringify(shippingAddress));
+
         if (!paymentData || !pspReference) {
             return json({ error: 'Missing paymentData or pspReference' }, { status: 400 });
         }
@@ -21,33 +23,46 @@ export async function POST({ request }) {
         // to get a fresh paymentData signature from Adyen.
 
         // Calculate Tax logic (replicating direct PayPal/Stripe logic)
-        // Hardcoded subtotal for demo purposes
-        const subtotal = 10.00;
-        const stateCode = shippingAddress?.stateOrProvince || shippingAddress?.state;
+        // Hardcoded subtotal for demo purposes - matches the create-payment base of $1.00
+        const subtotal = 1.00;
+
+        // Flexible state extraction
+        const stateCode = shippingAddress?.stateOrProvince || shippingAddress?.state || shippingAddress?.admin_area_1 || 'CA';
+
+        console.log(`Calculating tax for state: ${stateCode} (Derived from ${JSON.stringify(shippingAddress)})`);
 
         // Use our shared tax library
         const taxAmountStr = calculateTax(subtotal, stateCode); // e.g. "0.90"
-        const totalAmountStr = calculateTotal(subtotal, stateCode); // e.g. "10.90"
+
+        // Calculate Total with Tax
+        const taxVal = parseFloat(taxAmountStr);
+        const totalVal = subtotal + taxVal;
 
         // Convert to minor units for Adyen (cents)
-        const totalValue = Math.round(parseFloat(totalAmountStr) * 100);
-        const taxValue = Math.round(parseFloat(taxAmountStr) * 100);
+        const totalValue = Math.round(totalVal * 100);
+        const subtotalValue = Math.round(subtotal * 100);
+        const taxValue = Math.round(taxVal * 100);
 
         const updateRequest = {
             paymentData,
             pspReference,
             amount: {
                 currency: "USD",
-                value: totalValue
-            },
-            // Optional: Pass tax details if Adyen/PayPal supports it in this flow
-            // taxAmount: {
-            //    currency: "USD",
-            //    value: taxValue
-            // }
+                value: totalValue,
+                // Attempting to pass breakdown via standard PayPal structure if Adyen permits it loosely
+                // Note: Adyen generic API usually only takes 'amount', but for specific PayPal endpoint it might pass through
+                // If this fails, we will know Adyen restricts the schema tightly.
+                breakdown: {
+                    item_total: { currency: "USD", value: subtotalValue },
+                    tax_total: { currency: "USD", value: taxValue }
+                }
+            }
+            // taxAmount removed to fix "Cannot ship to this address" error (some providers reject unknown fields)
         };
 
+        console.log("Sending Adyen Update Request:", JSON.stringify(updateRequest));
         const response = await adyenRequest('/paypal/updateOrder', updateRequest, false);
+        console.log("Adyen Update Response:", JSON.stringify(response));
 
         return json(response);
     } catch (error) {

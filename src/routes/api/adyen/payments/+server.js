@@ -12,28 +12,37 @@ export async function POST({ request, url }) {
         const { data, recurring, deliveryAddress, lockAddress, shopperName } = body; // state.data from frontend
 
         const paymentRequest = {
-            amount: { currency: "USD", value: 1000 },
+            amount: { currency: "USD", value: 100 }, // $1.00
             reference: `YOUR_ORDER_NUMBER_${Date.now()}`,
             paymentMethod: data.paymentMethod,
-            returnUrl: "http://localhost:5173/adyen", // Redirect handling
+            returnUrl: "http://localhost:5173/adyen",
             merchantAccount: env.ADYEN_MERCHANT_ACCOUNT,
-            channel: "Web", // Required for Adyen
-            shopperName: shopperName, // { firstName: "...", lastName: "..." }
-            browserInfo: data.browserInfo, // Important for 3DS/Fraud
-            captureDelayHours: 168, // Delay capture for manual processing (7 days in hours)
+            channel: "Web",
+            countryCode: "US",
+            origin: "http://localhost:5173",
+            shopperEmail: "test-buyer@example.com",
+            shopperName: shopperName,
+            browserInfo: data.browserInfo,
+            // lineItems removed to prevent validation mismatches
             additionalData: {
-                "paypal.intent": "authorize", // PayPal AUTHORIZE intent
+                "paypal.intent": "sale"
             }
         };
 
-        if (recurring) {
+        console.log("Adyen Payment Method Type:", data.paymentMethod?.type);
+
+        // Treat 'paypal' and 'venmo' similarly to avoid "Something went wrong" errors due to address/vaulting complexity
+        const isPayPalOrVenmo = ['venmo', 'paypal', 'paywithgoogle'].includes(data.paymentMethod?.type);
+
+        if (recurring && !isPayPalOrVenmo) {
             paymentRequest.shopperReference = 'test_shopper_1';
             paymentRequest.recurringProcessingModel = 'Subscription';
             paymentRequest.storePaymentMethod = true;
             paymentRequest.shopperInteraction = 'Ecommerce';
         }
 
-        if (deliveryAddress) {
+        // We omit delivery address for PayPal/Venmo to rely on their internal address selection ("GET_FROM_FILE" equivalent)
+        if (deliveryAddress && !isPayPalOrVenmo) {
             paymentRequest.deliveryAddress = deliveryAddress;
         }
 
