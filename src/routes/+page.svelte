@@ -30,6 +30,7 @@
 	};
 
 	let shippingPreference = "SET_PROVIDED_ADDRESS";
+	let requestVaulting = false;
 
 	// Calculate tax and total based on current shipping address
 	$: currentTax = calculateTax(
@@ -97,6 +98,7 @@
 											initial_state:
 												shippingAddress.admin_area_1,
 											isProduction,
+											requestVaulting,
 											paymentSource: data.paymentSource,
 										}),
 									},
@@ -435,6 +437,26 @@
 						</h3>
 					</div>
 					<div class="space-y-3">
+						<!-- Recurring / Vault Toggle -->
+						<label
+							class="flex items-center p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors"
+						>
+							<input
+								type="checkbox"
+								bind:checked={requestVaulting}
+								class="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+							/>
+							<div class="ml-3">
+								<span class="font-semibold text-slate-800"
+									>Subscribe (Recurring)</span
+								>
+								<p class="text-xs text-slate-500">
+									Save payment method for future use
+								</p>
+							</div>
+						</label>
+
+						<!-- Shipping Preference Radio Group -->
 						<label
 							class="flex items-center p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors"
 						>
@@ -446,10 +468,10 @@
 							/>
 							<div class="ml-3">
 								<span class="font-semibold text-slate-800"
-									>Pre-fill Address</span
+									>Lock Address (Pre-filled)</span
 								>
 								<p class="text-xs text-slate-500">
-									Use the address below to pre-fill checkout
+									Pass address and prevent editing
 								</p>
 							</div>
 						</label>
@@ -464,11 +486,10 @@
 							/>
 							<div class="ml-3">
 								<span class="font-semibold text-slate-800"
-									>PayPal Account Address</span
+									>Editable (From Account)</span
 								>
 								<p class="text-xs text-slate-500">
-									User selects from their saved PayPal
-									addresses
+									User selects/edits address in popup
 								</p>
 							</div>
 						</label>

@@ -86,6 +86,8 @@ export async function POST({ request }) {
 		// but providing it as 'SET_PROVIDED_ADDRESS' often works. However, 'GET_FROM_FILE' is safer for Venmo.
 		// For now, we respect the incoming preference but ensure we route to the correct object.
 
+		const requestVaulting = body.requestVaulting || false;
+
 		if (body.paymentSource === 'venmo') {
 			paymentSource = {
 				venmo: {
@@ -93,20 +95,30 @@ export async function POST({ request }) {
 						...experienceContext,
 						shipping_preference: 'GET_FROM_FILE'
 					}
-					// Vaulting removed for Venmo to debug error
 				}
 			};
+
+			if (requestVaulting) {
+				paymentSource.venmo.attributes = {
+					vault: {
+						store_in_vault: 'ON_SUCCESS',
+						usage_type: body.vault_usage_type || 'MERCHANT',
+						customer_type: body.vault_customer_type || 'CONSUMER'
+					}
+				};
+			}
 		} else {
 			paymentSource = {
 				paypal: {
 					experience_context: experienceContext,
-					attributes: {
+					// Only add vault attributes if requested (or default behavior)
+					attributes: requestVaulting ? {
 						vault: {
 							store_in_vault: 'ON_SUCCESS',
 							usage_type: body.vault_usage_type || 'MERCHANT',
 							customer_type: body.vault_customer_type || 'CONSUMER'
 						}
-					}
+					} : undefined
 				}
 			};
 		}

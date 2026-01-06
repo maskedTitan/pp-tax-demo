@@ -31,10 +31,11 @@ export async function POST({ request, url }) {
 
         console.log("Adyen Payment Method Type:", data.paymentMethod?.type);
 
-        // Treat 'paypal' and 'venmo' similarly to avoid "Something went wrong" errors due to address/vaulting complexity
+        // Treat 'paypal' and 'venmo' similarly for address handling (omitting prevents collisions)
+        // We NOW ALLOW recurring for BOTH (since your account supports Venmo Vaulting!).
         const isPayPalOrVenmo = ['venmo', 'paypal', 'paywithgoogle'].includes(data.paymentMethod?.type);
 
-        if (recurring && !isPayPalOrVenmo) {
+        if (recurring) {
             paymentRequest.shopperReference = 'test_shopper_1';
             paymentRequest.recurringProcessingModel = 'Subscription';
             paymentRequest.storePaymentMethod = true;
