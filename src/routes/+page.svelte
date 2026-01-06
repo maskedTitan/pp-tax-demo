@@ -361,7 +361,7 @@
 						</p>
 						<p class="text-xs text-purple-800 mb-3">
 							The order starts at <span class="font-bold"
-								>$100.00</span
+								>${PRODUCT_SUBTOTAL}</span
 							> (no tax). When you select your shipping address in
 							PayPal, the total updates automatically based on the
 							state.
@@ -372,7 +372,7 @@
 									>CA</span
 								>
 								<span class="text-slate-600 ml-1"
-									>8.5% → $108.50</span
+									>8.5% → $1.09</span
 								>
 							</div>
 							<div class="bg-white/70 rounded-lg p-2 text-center">
@@ -380,7 +380,7 @@
 									>TX</span
 								>
 								<span class="text-slate-600 ml-1"
-									>8.0% → $108.00</span
+									>8.0% → $1.08</span
 								>
 							</div>
 							<div class="bg-white/70 rounded-lg p-2 text-center">
@@ -388,7 +388,7 @@
 									>FL</span
 								>
 								<span class="text-slate-600 ml-1"
-									>7.0% → $107.00</span
+									>7.0% → $1.07</span
 								>
 							</div>
 							<div class="bg-white/70 rounded-lg p-2 text-center">
@@ -396,7 +396,7 @@
 									>DE</span
 								>
 								<span class="text-slate-600 ml-1"
-									>0% → $100.00</span
+									>0% → $1.00</span
 								>
 							</div>
 						</div>
