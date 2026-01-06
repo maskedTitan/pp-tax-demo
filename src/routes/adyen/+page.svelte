@@ -11,9 +11,13 @@
     let isRecurring = false;
     let lockAddress = false;
     let useServiceAddress = true;
+    let disableShipping = true;
     let currentPaymentData = null;
     let currentPspReference = null;
     let paypalOrderId = null;
+    let paypalComponent = null;
+    let adyenCheckout = null;
+    let isInitialMount = true;
     let serviceAddress = {
         firstName: "John",
         lastName: "Doe",
@@ -31,34 +35,18 @@
     const clientKey = import.meta.env.VITE_ADYEN_CLIENT_KEY;
     const environment = "test";
 
-    onMount(async () => {
-        try {
-            // Dynamically import Adyen to ensure it only runs on client and avoids build resolution issues
-            const module = await import("@adyen/adyen-web");
-            const AdyenCheckout = module.default || module.AdyenCheckout;
-            const PayPal = module.PayPal; // Get PayPal class
+    async function createPayPalComponent(checkout, PayPal) {
+        // Unmount existing component if any
+        if (paypalComponent) {
+            try {
+                paypalComponent.unmount();
+            } catch (e) {
+                console.log("Error unmounting component:", e);
+            }
+        }
 
-            // Dynamically import CSS
-            await import("@adyen/adyen-web/styles/adyen.css");
-
-            const configuration = {
-                environment,
-                clientKey,
-                countryCode: "US",
-                analytics: {
-                    enabled: false, // Disabled for localhost dev
-                },
-                onError: (error) => {
-                    console.error("Adyen Error:", error);
-                },
-            };
-
-            console.log("Initializing AdyenCheckout...");
-            const checkout = await AdyenCheckout(configuration);
-            console.log("Checkout initialized");
-
-            // Create PayPal component using v6 API (direct instantiation)
-            const paypalComponent = new PayPal(checkout, {
+            // Create PayPal component configuration
+            const paypalConfig = {
                 environment,
                 showPayButton: true,
                 countryCode: "US", // Required for PayPal
@@ -66,8 +54,6 @@
                     value: 100, // $1.00
                     currency: "USD",
                 },
-                // Enable Express Checkout flow to allow address updates
-                isExpress: true,
                 blockPayPalCreditButton: true,
                 blockPayPalPayLaterButton: false,
 
@@ -76,9 +62,22 @@
                     color: "black",
                     height: 48,
                 },
+            };
 
-                // Handling Address Changes (Required for "Editable" address)
-                onShippingAddressChange: async (data, actions) => {
+            // Configure shipping based on disableShipping state
+            if (disableShipping) {
+                // Disable shipping address collection
+                paypalConfig.isExpress = false;
+                paypalConfig.shippingAddressRequired = false;
+                paypalConfig.shippingAddressEditable = false;
+            } else {
+                // Enable shipping address collection
+                paypalConfig.isExpress = true;
+                paypalConfig.shippingAddressRequired = true;
+                paypalConfig.shippingAddressEditable = true;
+
+                // Add shipping address change handler when shipping is enabled
+                paypalConfig.onShippingAddressChange = async (data, actions) => {
                     console.log(
                         "Adyen: User changed shipping address in PayPal",
                         data,
@@ -140,15 +139,17 @@
                         console.error("Adyen: Update error", error);
                         return actions.reject();
                     }
-                },
+                };
 
-                onShippingOptionsChange: (data) => {
+                paypalConfig.onShippingOptionsChange = (data) => {
                     console.log("Adyen: User changed shipping option", data);
                     return Promise.resolve();
-                },
+                };
+            }
 
-                onSubmit: async (state, component) => {
-                    console.log("PayPal Submit (Payment Data):", state.data);
+            paypalConfig.onSubmit = async (state, component) => {
+                    console.log("PayPal Submit (Full State Data):", JSON.stringify(state.data, null, 2));
+                    console.log("Full Payment Method Object:", JSON.stringify(state.data.paymentMethod, null, 2));
                     component.setStatus("loading");
 
                     // Only Initialize final address with form data IF it hasn't been updated by PayPal events
@@ -164,12 +165,12 @@
                     }
 
                     try {
-                        const isVenmo =
-                            state.data?.paymentMethod?.type === "venmo";
+                        const isPayPalType = state.data?.paymentMethod?.type === "paypal";
 
                         const payload = {
                             data: state.data,
-                            recurring: isRecurring && !isVenmo, // Disable recurring for Venmo to prevent vaulting errors
+                            recurring: isRecurring,
+                            disableShipping: disableShipping,
                             lockAddress: lockAddress && useServiceAddress, // Only lock if we are sending an address
                         };
 
@@ -220,9 +221,9 @@
                         component.setStatus("ready");
                         alert("Payment Error: " + error.message);
                     }
-                },
+                };
 
-                onAdditionalDetails: async (state, component) => {
+            paypalConfig.onAdditionalDetails = async (state, component) => {
                     console.log("PayPal Additional Details:", state.data);
                     component.setStatus("loading");
 
@@ -310,19 +311,69 @@
                         component.setStatus("ready");
                         alert("Payment Details Error: " + error.message);
                     }
-                },
+                };
 
-                onCancel: (data, component) => {
-                    console.log("PayPal Cancelled:", data);
-                },
-                onError: (error, component) => {
-                    console.error("PayPal Error:", error);
-                },
-            });
+            paypalConfig.onCancel = (data, component) => {
+                console.log("PayPal Cancelled:", data);
+            };
+
+            paypalConfig.onError = (error, component) => {
+                console.error("PayPal Error:", error);
+            };
+
+            // Create PayPal component with the configuration
+            paypalComponent = new PayPal(checkout, paypalConfig);
 
             if (adyenContainer) {
                 paypalComponent.mount(adyenContainer);
             }
+        }
+
+    // Reactive statement to recreate PayPal component when disableShipping changes
+    // Skip on initial mount to avoid double creation
+    $: if (adyenCheckout && adyenContainer && !paymentSuccess && !isInitialMount) {
+        console.log("Recreating PayPal component with disableShipping:", disableShipping);
+        (async () => {
+            const module = await import("@adyen/adyen-web");
+            const PayPal = module.PayPal;
+            await createPayPalComponent(adyenCheckout, PayPal);
+        })();
+    }
+
+    // Watch disableShipping to trigger the reactive statement above
+    $: disableShipping, void 0;
+
+    onMount(async () => {
+        try {
+            // Dynamically import Adyen to ensure it only runs on client and avoids build resolution issues
+            const module = await import("@adyen/adyen-web");
+            const AdyenCheckout = module.default || module.AdyenCheckout;
+            const PayPal = module.PayPal; // Get PayPal class
+
+            // Dynamically import CSS
+            await import("@adyen/adyen-web/styles/adyen.css");
+
+            const configuration = {
+                environment,
+                clientKey,
+                countryCode: "US",
+                analytics: {
+                    enabled: false, // Disabled for localhost dev
+                },
+                onError: (error) => {
+                    console.error("Adyen Error:", error);
+                },
+            };
+
+            console.log("Initializing AdyenCheckout...");
+            adyenCheckout = await AdyenCheckout(configuration);
+            console.log("Checkout initialized");
+
+            // Initial component creation
+            await createPayPalComponent(adyenCheckout, PayPal);
+
+            // Mark initial mount as complete
+            isInitialMount = false;
         } catch (error) {
             console.error("Failed to initialize Adyen:", error);
             errorMessage =
@@ -364,6 +415,25 @@
 
                         <!-- Recurring Checkbox -->
                         <div class="space-y-3">
+                            <label
+                                class="flex items-start p-4 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors"
+                            >
+                                <input
+                                    type="checkbox"
+                                    id="disableShipping"
+                                    bind:checked={disableShipping}
+                                    class="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 border-slate-300 mt-0.5"
+                                />
+                                <div class="ml-3">
+                                    <span class="font-semibold text-slate-800"
+                                        >Disable Shipping Address</span
+                                    >
+                                    <p class="text-xs text-slate-500 mt-1">
+                                        Hide shipping address in PayPal/Venmo checkout (may cause errors with Venmo recurring)
+                                    </p>
+                                </div>
+                            </label>
+
                             <label
                                 class="flex items-start p-4 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors"
                             >

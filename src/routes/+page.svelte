@@ -31,6 +31,7 @@
 
 	let shippingPreference = "SET_PROVIDED_ADDRESS";
 	let requestVaulting = false;
+	let disableShipping = false;
 
 	// Calculate tax and total based on current shipping address
 	$: currentTax = calculateTax(
@@ -75,10 +76,9 @@
 			});
 
 			if (paypal && paypal.Buttons) {
-				await paypal
-					.Buttons({
-						// Creates the order on the server-side
-						createOrder: async (data, actions) => {
+				const buttonConfig = {
+					// Creates the order on the server-side
+					createOrder: async (data, actions) => {
 							try {
 								const response = await fetch(
 									"/api/paypal/create-order",
@@ -93,8 +93,9 @@
 											description: "Sample Product",
 											brand_name: "PayPal Demo Store",
 											shipping_address: shippingAddress,
-											shipping_preference:
-												shippingPreference,
+											shipping_preference: disableShipping
+												? "NO_SHIPPING"
+												: shippingPreference,
 											initial_state:
 												shippingAddress.admin_area_1,
 											isProduction,
@@ -120,8 +121,11 @@
 								throw error;
 							}
 						},
-						// Handles shipping address changes - updates tax dynamically
-						onShippingAddressChange: (data, actions) => {
+					};
+
+				// Only add shipping address change handler if shipping is enabled
+				if (!disableShipping) {
+					buttonConfig.onShippingAddressChange = (data, actions) => {
 							const stateCode = data.shippingAddress?.state;
 							const countryCode =
 								data.shippingAddress?.countryCode;
@@ -165,9 +169,11 @@
 									);
 									return actions.reject();
 								});
-						},
-						// Handles successful payment - captures on server-side
-						onApprove: async (data) => {
+					};
+				}
+
+				// Add remaining handlers
+				buttonConfig.onApprove = async (data) => {
 							try {
 								const response = await fetch(
 									"/api/paypal/capture-order",
@@ -212,16 +218,16 @@
 									"Payment failed. Please try again.";
 								successMessage = "";
 							}
-						},
-						// Handles errors
-						onError: (err) => {
-							console.error("PayPal error:", err);
-							errorMessage =
-								"An error occurred during the transaction. Please try again.";
-							successMessage = "";
-						},
-					})
-					.render(paypalButtonsContainer);
+						};
+
+				buttonConfig.onError = (err) => {
+					console.error("PayPal error:", err);
+					errorMessage =
+						"An error occurred during the transaction. Please try again.";
+					successMessage = "";
+				};
+
+				await paypal.Buttons(buttonConfig).render(paypalButtonsContainer);
 			}
 		} catch (error) {
 			console.error("Failed to load PayPal SDK:", error);
@@ -437,6 +443,26 @@
 						</h3>
 					</div>
 					<div class="space-y-3">
+						<!-- Disable Shipping Checkbox -->
+						<label
+							class="flex items-center p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors"
+						>
+							<input
+								type="checkbox"
+								bind:checked={disableShipping}
+								on:change={initializePayPal}
+								class="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+							/>
+							<div class="ml-3">
+								<span class="font-semibold text-slate-800"
+									>Disable Shipping Address</span
+								>
+								<p class="text-xs text-slate-500">
+									Hide shipping address in PayPal/Venmo checkout (may cause errors with Venmo recurring)
+								</p>
+							</div>
+						</label>
+
 						<!-- Recurring / Vault Toggle -->
 						<label
 							class="flex items-center p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors"
@@ -458,12 +484,15 @@
 
 						<!-- Shipping Preference Radio Group -->
 						<label
+							class:opacity-50={disableShipping}
+							class:pointer-events-none={disableShipping}
 							class="flex items-center p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors"
 						>
 							<input
 								type="radio"
 								bind:group={shippingPreference}
 								value="SET_PROVIDED_ADDRESS"
+								disabled={disableShipping}
 								class="w-5 h-5 text-blue-600 border-slate-300"
 							/>
 							<div class="ml-3">
@@ -477,11 +506,14 @@
 						</label>
 						<label
 							class="flex items-center p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors"
+							class:opacity-50={disableShipping}
+							class:pointer-events-none={disableShipping}
 						>
 							<input
 								type="radio"
 								bind:group={shippingPreference}
 								value="GET_FROM_FILE"
+								disabled={disableShipping}
 								class="w-5 h-5 text-blue-600 border-slate-300"
 							/>
 							<div class="ml-3">
@@ -497,7 +529,9 @@
 					<p
 						class="text-xs text-slate-500 mt-4 p-3 bg-amber-50 border border-amber-200/50 rounded-lg"
 					>
-						{#if shippingPreference === "SET_PROVIDED_ADDRESS"}
+						{#if disableShipping}
+							🚫 Shipping address collection is disabled. PayPal/Venmo will not request shipping information.
+						{:else if shippingPreference === "SET_PROVIDED_ADDRESS"}
 							📋 The address below will be sent to PayPal to
 							pre-fill the checkout.
 						{:else}

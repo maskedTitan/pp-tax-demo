@@ -9,7 +9,12 @@ import { env } from '$env/dynamic/private';
 export async function POST({ request, url }) {
     try {
         const body = await request.json();
-        const { data, recurring, deliveryAddress, lockAddress, shopperName } = body; // state.data from frontend
+        const { data, recurring, disableShipping, deliveryAddress, lockAddress, shopperName } = body; // state.data from frontend
+
+        // PayPal and Venmo both report as type 'paypal' through Adyen
+        // We can't distinguish them from the payment method data alone
+        const isPayPalType = data.paymentMethod?.type === 'paypal';
+        console.log('Payment Method Type:', data.paymentMethod?.type, '| Recurring:', recurring, '| Disable Shipping:', disableShipping);
 
         const paymentRequest = {
             amount: { currency: "USD", value: 100 }, // $1.00
@@ -21,20 +26,16 @@ export async function POST({ request, url }) {
             countryCode: "US",
             origin: "http://localhost:5173",
             shopperEmail: "test-buyer@example.com",
-            shopperName: shopperName,
             browserInfo: data.browserInfo,
-            // lineItems removed to prevent validation mismatches
-            additionalData: {
-                "paypal.intent": "sale"
-            }
+            additionalData: {}
         };
 
-        console.log("Adyen Payment Method Type:", data.paymentMethod?.type);
+        // Only include shopperName for non-PayPal/Venmo payments
+        if (!isPayPalType && shopperName) {
+            paymentRequest.shopperName = shopperName;
+        }
 
-        // Treat 'paypal' and 'venmo' similarly for address handling (omitting prevents collisions)
-        // We NOW ALLOW recurring for BOTH (since your account supports Venmo Vaulting!).
-        const isPayPalOrVenmo = ['venmo', 'paypal', 'paywithgoogle'].includes(data.paymentMethod?.type);
-
+        // Recurring configuration
         if (recurring) {
             paymentRequest.shopperReference = 'test_shopper_1';
             paymentRequest.recurringProcessingModel = 'Subscription';
@@ -42,9 +43,45 @@ export async function POST({ request, url }) {
             paymentRequest.shopperInteraction = 'Ecommerce';
         }
 
-        // We omit delivery address for PayPal/Venmo to rely on their internal address selection ("GET_FROM_FILE" equivalent)
-        if (deliveryAddress && !isPayPalOrVenmo) {
+        // We omit delivery address for PayPal/Venmo to rely on their internal address selection
+        if (deliveryAddress && !isPayPalType) {
             paymentRequest.deliveryAddress = deliveryAddress;
+        }
+
+        // PayPal/Venmo configuration
+        if (isPayPalType) {
+            paymentRequest.additionalData["paypal.intent"] = "sale";
+
+            if (disableShipping) {
+                console.log('Configuring PayPal/Venmo with NO_SHIPPING');
+                paymentRequest.additionalData["paypal.shipping_preference"] = "NO_SHIPPING";
+                paymentRequest.additionalData["paypal.userAction"] = "PAY_NOW";
+
+                paymentRequest.lineItems = [
+                    {
+                        description: "Digital Service - No Shipping Required",
+                        amountIncludingTax: 100,
+                        amountExcludingTax: 100,
+                        taxAmount: 0,
+                        id: "digital_service_1",
+                        quantity: 1,
+                        taxCategory: "None"
+                    }
+                ];
+            } else {
+                console.log('Configuring PayPal/Venmo with shipping enabled');
+                // Allow shipping address to be collected
+                paymentRequest.lineItems = [
+                    {
+                        description: "Digital Service",
+                        amountIncludingTax: 100,
+                        amountExcludingTax: 100,
+                        taxAmount: 0,
+                        id: "item_1",
+                        quantity: 1
+                    }
+                ];
+            }
         }
 
         const response = await adyenRequest('/payments', paymentRequest);

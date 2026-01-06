@@ -21,6 +21,9 @@ export async function POST({ request }) {
 		const taxAmount = '0.00';
 		const totalAmount = subtotal;
 
+		// Determine shipping preference early
+		const shippingPref = body.shipping_preference || 'SET_PROVIDED_ADDRESS';
+
 		// Build purchase unit with optional shipping address
 		const purchaseUnit = {
 			reference_id: 'default',
@@ -47,14 +50,15 @@ export async function POST({ request }) {
 						value: subtotal
 					},
 					quantity: '1',
-					category: 'PHYSICAL_GOODS'
+					category: shippingPref === 'NO_SHIPPING' ? 'DIGITAL_GOODS' : 'PHYSICAL_GOODS'
 				}
 			]
 		};
 
-		// Add shipping address if provided AND NOT Venmo
+		// Add shipping address if provided AND NOT Venmo AND NOT NO_SHIPPING
 		// We skip adding the explicit shipping address object for Venmo to strictly follow "GET_FROM_FILE" flow
-		if (body.shipping_address && body.paymentSource !== 'venmo') {
+		// Also skip if NO_SHIPPING is explicitly requested
+		if (body.shipping_address && body.paymentSource !== 'venmo' && shippingPref !== 'NO_SHIPPING') {
 			purchaseUnit.shipping = {
 				name: {
 					full_name: body.shipping_address.name
@@ -77,7 +81,7 @@ export async function POST({ request }) {
 			brand_name: body.brand_name || 'Your Store',
 			landing_page: 'NO_PREFERENCE',
 			user_action: 'PAY_NOW',
-			shipping_preference: body.shipping_preference || 'SET_PROVIDED_ADDRESS',
+			shipping_preference: shippingPref,
 			return_url: body.return_url || `${origin}/`,
 			cancel_url: body.cancel_url || `${origin}/`
 		};
