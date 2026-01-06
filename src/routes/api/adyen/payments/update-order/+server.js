@@ -40,22 +40,13 @@ export async function POST({ request }) {
 
         // Convert to minor units for Adyen (cents)
         const totalValue = Math.round(totalVal * 100);
-        const subtotalValue = Math.round(subtotal * 100);
-        const taxValue = Math.round(taxVal * 100);
 
         const updateRequest = {
             paymentData,
             pspReference,
             amount: {
                 currency: "USD",
-                value: totalValue,
-                // Attempting to pass breakdown via standard PayPal structure if Adyen permits it loosely
-                // Note: Adyen generic API usually only takes 'amount', but for specific PayPal endpoint it might pass through
-                // If this fails, we will know Adyen restricts the schema tightly.
-                breakdown: {
-                    item_total: { currency: "USD", value: subtotalValue },
-                    tax_total: { currency: "USD", value: taxValue }
-                }
+                value: totalValue
             }
             // taxAmount removed to fix "Cannot ship to this address" error (some providers reject unknown fields)
         };
