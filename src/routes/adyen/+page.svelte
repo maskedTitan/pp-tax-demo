@@ -451,6 +451,9 @@
                                         Save payment details for future
                                         automatic payments
                                     </p>
+                                    <p class="text-xs text-amber-600 font-semibold mt-1">
+                                        ⚠️ Venmo vaulting not supported in sandbox
+                                    </p>
                                 </div>
                             </label>
 

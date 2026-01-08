@@ -11,7 +11,7 @@
 	let payerEmail = "";
 
 	// Product details
-	const PRODUCT_SUBTOTAL = "100.00";
+	const PRODUCT_SUBTOTAL = "1.00";
 
 	// Shipping address with prefilled values
 	let shippingAddress = {

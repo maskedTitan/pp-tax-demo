@@ -479,6 +479,9 @@
 								<p class="text-xs text-slate-500">
 									Save payment method for future use
 								</p>
+								<p class="text-xs text-amber-600 font-semibold mt-1">
+									⚠️ Venmo vaulting not supported in sandbox
+								</p>
 							</div>
 						</label>
 
