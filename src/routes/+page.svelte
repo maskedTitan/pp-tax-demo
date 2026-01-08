@@ -458,7 +458,7 @@
 									>Disable Shipping Address</span
 								>
 								<p class="text-xs text-slate-500">
-									Hide shipping address in PayPal/Venmo checkout (may cause errors with Venmo recurring)
+									Hide shipping address in PayPal/Venmo checkout (Venmo recurring will fail in sandbox)
 								</p>
 							</div>
 						</label>
@@ -478,6 +478,9 @@
 								>
 								<p class="text-xs text-slate-500">
 									Save payment method for future use
+								</p>
+								<p class="text-xs text-amber-600 font-semibold mt-1">
+									⚠️ Venmo recurring requires shipping address in sandbox (works without in production)
 								</p>
 							</div>
 						</label>

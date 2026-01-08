@@ -30,19 +30,24 @@ export async function POST({ request }) {
 			description: body.description || 'Sample Product',
 			amount: {
 				currency_code: body.currency_code || 'USD',
-				value: totalAmount,
-				breakdown: {
-					item_total: {
-						currency_code: body.currency_code || 'USD',
-						value: subtotal
-					},
-					tax_total: {
-						currency_code: body.currency_code || 'USD',
-						value: taxAmount
-					}
+				value: totalAmount
+			}
+		};
+
+		// Only add breakdown and items if NOT using NO_SHIPPING
+		// Per PayPal docs, when using NO_SHIPPING, keep the request minimal
+		if (shippingPref !== 'NO_SHIPPING') {
+			purchaseUnit.amount.breakdown = {
+				item_total: {
+					currency_code: body.currency_code || 'USD',
+					value: subtotal
+				},
+				tax_total: {
+					currency_code: body.currency_code || 'USD',
+					value: taxAmount
 				}
-			},
-			items: [
+			};
+			purchaseUnit.items = [
 				{
 					name: body.description || 'Sample Product',
 					unit_amount: {
@@ -50,10 +55,10 @@ export async function POST({ request }) {
 						value: subtotal
 					},
 					quantity: '1',
-					category: shippingPref === 'NO_SHIPPING' ? 'DIGITAL_GOODS' : 'PHYSICAL_GOODS'
+					category: 'PHYSICAL_GOODS'
 				}
-			]
-		};
+			];
+		}
 
 		// Add shipping address if provided AND NOT Venmo AND NOT NO_SHIPPING
 		// We skip adding the explicit shipping address object for Venmo to strictly follow "GET_FROM_FILE" flow
@@ -86,19 +91,14 @@ export async function POST({ request }) {
 			cancel_url: body.cancel_url || `${origin}/`
 		};
 
-		// If paying with Venmo, we should not enforce a shipping address override if it causes friction,
-		// but providing it as 'SET_PROVIDED_ADDRESS' often works. However, 'GET_FROM_FILE' is safer for Venmo.
-		// For now, we respect the incoming preference but ensure we route to the correct object.
-
+		// Venmo DOES support NO_SHIPPING according to PayPal docs
+		// Use the same experience_context for Venmo as requested
 		const requestVaulting = body.requestVaulting || false;
 
 		if (body.paymentSource === 'venmo') {
 			paymentSource = {
 				venmo: {
-					experience_context: {
-						...experienceContext,
-						shipping_preference: 'GET_FROM_FILE'
-					}
+					experience_context: experienceContext
 				}
 			};
 
