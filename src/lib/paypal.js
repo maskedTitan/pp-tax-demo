@@ -148,3 +148,60 @@ export async function getPayPalOrder(orderId, isProduction = false) {
 
 	return await response.json();
 }
+
+/**
+ * Create a vault setup token for zero-dollar auth
+ * @param {object} setupData - Setup token data
+ * @param {boolean} isProduction - Whether to use production environment
+ */
+export async function createVaultSetupToken(setupData, isProduction = false) {
+	const accessToken = await getPayPalAccessToken(isProduction);
+
+	const response = await fetch(`${getApiBase(isProduction)}/v3/vault/setup-tokens`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${accessToken}`
+		},
+		body: JSON.stringify(setupData)
+	});
+
+	if (!response.ok) {
+		const error = await response.json();
+		throw new Error(`Failed to create setup token: ${JSON.stringify(error)}`);
+	}
+
+	return await response.json();
+}
+
+/**
+ * Create a payment token from an approved setup token
+ * @param {string} setupTokenId - Setup token ID
+ * @param {boolean} isProduction - Whether to use production environment
+ */
+export async function createPaymentToken(setupTokenId, isProduction = false) {
+	const accessToken = await getPayPalAccessToken(isProduction);
+
+	const response = await fetch(`${getApiBase(isProduction)}/v3/vault/payment-tokens`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${accessToken}`
+		},
+		body: JSON.stringify({
+			payment_source: {
+				token: {
+					id: setupTokenId,
+					type: 'SETUP_TOKEN'
+				}
+			}
+		})
+	});
+
+	if (!response.ok) {
+		const error = await response.json();
+		throw new Error(`Failed to create payment token: ${JSON.stringify(error)}`);
+	}
+
+	return await response.json();
+}

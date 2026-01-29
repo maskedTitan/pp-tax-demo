@@ -11,12 +11,12 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<nav class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-lg sticky top-0 z-50">
+<nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
 	<div class="container mx-auto px-6 py-4">
 		<div class="flex justify-between items-center">
 			<!-- Logo/Brand -->
 			<div class="flex items-center gap-3">
-				<div class="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-2">
+				<div class="text-blue-600">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						class="h-6 w-6"
@@ -32,18 +32,16 @@
 						/>
 					</svg>
 				</div>
-				<span class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-					Payment Gateway Demo
-				</span>
 			</div>
 
 			<!-- Navigation Links -->
 			<div class="flex items-center gap-2">
 				<a
 					href="/"
-					class="flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 {currentPath === '/'
-						? 'bg-gradient-to-r from-blue-600 to-blue-700 shadow-md shadow-blue-500/50'
-						: 'hover:bg-slate-700/50'}"
+					class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 {currentPath ===
+					'/'
+						? 'bg-blue-50 text-blue-700'
+						: 'text-gray-600 hover:bg-gray-50'}"
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -63,9 +61,10 @@
 				</a>
 				<a
 					href="/adyen"
-					class="flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 {currentPath === '/adyen'
-						? 'bg-gradient-to-r from-purple-600 to-purple-700 shadow-md shadow-purple-500/50'
-						: 'hover:bg-slate-700/50'}"
+					class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 {currentPath ===
+					'/adyen'
+						? 'bg-blue-50 text-blue-700'
+						: 'text-gray-600 hover:bg-gray-50'}"
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
