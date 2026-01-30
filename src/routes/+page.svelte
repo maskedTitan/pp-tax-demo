@@ -150,7 +150,7 @@
 											"Content-Type": "application/json",
 										},
 										body: JSON.stringify({
-											brand_name: "PayPal Demo Store",
+											brand_name: "Demo Store",
 											shipping_preference: disableShipping
 												? "NO_SHIPPING"
 												: "GET_FROM_FILE",
@@ -249,7 +249,7 @@
 											amount: PRODUCT_SUBTOTAL,
 											currency_code: "USD",
 											description: "Sample Product",
-											brand_name: "PayPal Demo Store",
+											brand_name: "Demo Store",
 											shipping_address: shippingAddress,
 											shipping_preference: disableShipping
 												? "NO_SHIPPING"

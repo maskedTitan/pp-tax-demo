@@ -20,7 +20,7 @@ export async function POST({ request }) {
 					experience_context: {
 						return_url: body.return_url || `${origin}/`,
 						cancel_url: body.cancel_url || `${origin}/`,
-						brand_name: body.brand_name || 'PayPal Demo Store',
+						brand_name: body.brand_name || 'Demo Store',
 						shipping_preference: body.shipping_preference || 'GET_FROM_FILE'
 					}
 				}

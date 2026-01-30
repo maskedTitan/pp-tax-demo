@@ -14,12 +14,21 @@ export async function POST({ request }) {
 		// Get the origin from the request headers for return/cancel URLs
 		const origin = request.headers.get('origin') || 'http://localhost:5173';
 
-		// Build the order data according to PayPal Orders v2 API
-		const subtotal = body.amount || '1.00';
+		// SECURITY: Defining source of truth for price on the server
+		// In a real app, look this up from a database using a product ID
+		const PRODUCT_PRICE = '1.00';
 
-		// Start with $0 tax - will update via onShippingAddressChange callback
-		const taxAmount = '0.00';
-		const totalAmount = subtotal;
+		// Enforce the price - ignore client provided amount for the item
+		const subtotal = PRODUCT_PRICE;
+
+		// Calculate tax server-side if address is provided
+		let taxAmount = '0.00';
+		if (body.shipping_address && body.shipping_address.admin_area_1) {
+			taxAmount = calculateTax(subtotal, body.shipping_address.admin_area_1);
+		}
+
+		// Calculate total
+		const totalAmount = (parseFloat(subtotal) + parseFloat(taxAmount)).toFixed(2);
 
 		// Determine shipping preference early
 		const shippingPref = body.shipping_preference || 'SET_PROVIDED_ADDRESS';
