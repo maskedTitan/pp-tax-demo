@@ -75,7 +75,7 @@
 											amount: PRODUCT_SUBTOTAL,
 											currency_code: "USD",
 											description: "Sample Product",
-											brand_name: "PayPal Demo Store",
+											brand_name: "Demo Store",
 											shipping_address: shippingAddress,
 											shipping_preference:
 												shippingPreference,
