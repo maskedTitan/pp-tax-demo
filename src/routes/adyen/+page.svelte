@@ -1,5 +1,5 @@
 <script>
-    import { onMount } from "svelte";
+    import { onMount, onDestroy } from "svelte";
     // Dynamic import of CSS and JS to avoid SSR/Build issues
 
     let adyenContainer;
@@ -12,6 +12,25 @@
     let lockAddress = false;
     let useServiceAddress = true;
     let disableShipping = true;
+
+    // Session Timeout Configuration
+    const PRODUCTION_TIMEOUT_MINUTES = 60; // 60 minutes for production
+    const TEST_TIMEOUT_MINUTES = 0.5; // 30 seconds for testing
+    let enableSessionTimeout = true;
+    let useTestTimeout = false; // Toggle for shorter test timeout
+    let sessionStartTime = null;
+    let sessionTimeoutId = null;
+    let countdownIntervalId = null;
+    let remainingTime = null; // in seconds
+    let sessionExpired = false;
+    let showTimeoutWarning = false;
+
+    // Get current timeout duration in milliseconds
+    $: timeoutMinutes = useTestTimeout
+        ? TEST_TIMEOUT_MINUTES
+        : PRODUCTION_TIMEOUT_MINUTES;
+    $: timeoutMs = timeoutMinutes * 60 * 1000;
+    $: warningThresholdMs = useTestTimeout ? 30 * 1000 : 5 * 60 * 1000; // 30s for test, 5min for prod
 
     // UI State for collapsibles
     let showCheckoutOptions = true;
@@ -39,6 +58,142 @@
     // Placeholder configuration - in a real app these come from backend
     const clientKey = import.meta.env.VITE_ADYEN_CLIENT_KEY;
     const environment = "test";
+
+    // Session Timeout Functions
+    function startSessionTimer() {
+        if (!enableSessionTimeout) return;
+
+        // Clear any existing timers
+        clearSessionTimer();
+
+        sessionStartTime = Date.now();
+        sessionExpired = false;
+        showTimeoutWarning = false;
+        remainingTime = Math.floor(timeoutMs / 1000);
+
+        // Set up the expiration timeout
+        sessionTimeoutId = setTimeout(() => {
+            handleSessionExpired();
+        }, timeoutMs);
+
+        // Set up countdown interval (updates every second)
+        countdownIntervalId = setInterval(() => {
+            if (sessionStartTime) {
+                const elapsed = Date.now() - sessionStartTime;
+                remainingTime = Math.max(
+                    0,
+                    Math.floor((timeoutMs - elapsed) / 1000),
+                );
+
+                // Show warning when approaching timeout
+                if (
+                    elapsed >= timeoutMs - warningThresholdMs &&
+                    !showTimeoutWarning
+                ) {
+                    showTimeoutWarning = true;
+                }
+            }
+        }, 1000);
+    }
+
+    function clearSessionTimer() {
+        if (sessionTimeoutId) {
+            clearTimeout(sessionTimeoutId);
+            sessionTimeoutId = null;
+        }
+        if (countdownIntervalId) {
+            clearInterval(countdownIntervalId);
+            countdownIntervalId = null;
+        }
+    }
+
+    function handleSessionExpired() {
+        sessionExpired = true;
+        showTimeoutWarning = false;
+        remainingTime = 0;
+        clearSessionTimer();
+
+        // Log the timeout event
+        const timeoutDisplay =
+            timeoutMinutes < 1
+                ? `${Math.round(timeoutMinutes * 60)} seconds`
+                : `${timeoutMinutes} minutes`;
+
+        logCancellation("timeout", {
+            reason: "Session timeout",
+            sessionDuration: timeoutDisplay,
+            startTime: sessionStartTime
+                ? new Date(sessionStartTime).toISOString()
+                : null,
+            expiredAt: new Date().toISOString(),
+        });
+
+        console.log(
+            `[Session Expired] Order: ${paypalOrderId || "N/A"}, Duration: ${timeoutDisplay}`,
+        );
+
+        // Unmount the PayPal component to prevent further interaction
+        if (paypalComponent) {
+            try {
+                paypalComponent.unmount();
+            } catch (e) {
+                console.log("Error unmounting expired component:", e);
+            }
+        }
+    }
+
+    function resetSession() {
+        sessionExpired = false;
+        showTimeoutWarning = false;
+        sessionStartTime = null;
+        remainingTime = null;
+        clearSessionTimer();
+
+        // Recreate the PayPal component
+        if (adyenCheckout) {
+            (async () => {
+                const module = await import("@adyen/adyen-web");
+                const PayPal = module.PayPal;
+                await createPayPalComponent(adyenCheckout, PayPal);
+                startSessionTimer();
+            })();
+        }
+    }
+
+    function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, "0")}`;
+    }
+
+    // Enhanced cancellation logging
+    function logCancellation(type, data = {}) {
+        const logEntry = {
+            type: type, // 'user_cancel', 'timeout', 'error'
+            timestamp: new Date().toISOString(),
+            sessionDuration: sessionStartTime
+                ? Math.floor((Date.now() - sessionStartTime) / 1000)
+                : null,
+            paypalOrderId: paypalOrderId,
+            isRecurring: isRecurring,
+            disableShipping: disableShipping,
+            ...data,
+        };
+
+        // In production, you would send this to your backend:
+        // fetch('/api/log/checkout-cancellation', {
+        //     method: 'POST',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify(logEntry)
+        // });
+
+        return logEntry;
+    }
+
+    // Cleanup on component destroy
+    onDestroy(() => {
+        clearSessionTimer();
+    });
 
     async function createPayPalComponent(checkout, PayPal) {
         // Unmount existing component if any
@@ -83,10 +238,7 @@
 
             // Add shipping address change handler when shipping is enabled
             paypalConfig.onShippingAddressChange = async (data, actions) => {
-                console.log(
-                    "Adyen: User changed shipping address in PayPal",
-                    data,
-                );
+                console.log("[PayPal] onShippingAddressChange");
 
                 if (data.orderID) {
                     paypalOrderId = data.orderID;
@@ -147,21 +299,18 @@
             };
 
             paypalConfig.onShippingOptionsChange = (data) => {
-                console.log("Adyen: User changed shipping option", data);
+                console.log("[PayPal] onShippingOptionsChange");
                 return Promise.resolve();
             };
         }
 
         paypalConfig.onSubmit = async (state, component) => {
-            console.log(
-                "PayPal Submit (Full State Data):",
-                JSON.stringify(state.data, null, 2),
-            );
-            console.log(
-                "Full Payment Method Object:",
-                JSON.stringify(state.data.paymentMethod, null, 2),
-            );
+            console.log("[PayPal] onSubmit");
             component.setStatus("loading");
+
+            if (enableSessionTimeout && !sessionStartTime) {
+                startSessionTimer();
+            }
 
             // Only Initialize final address with form data IF it hasn't been updated by PayPal events
             // And only if we are using the service address
@@ -221,11 +370,22 @@
                     if (result.pspReference) {
                         currentPspReference = result.pspReference;
                     }
+
+                    // Capture PayPal order ID/token from action
+                    const orderId =
+                        result.action.sdkData?.token ||
+                        result.action.sdkData?.orderID;
+
+                    if (orderId && !paypalOrderId) {
+                        paypalOrderId = orderId;
+                    }
+
                     component.handleAction(result.action);
                 } else {
                     component.setStatus("ready");
                     paymentSuccess = true;
                     paymentResult = result;
+                    clearSessionTimer(); // Clear timer on success
                 }
             } catch (error) {
                 console.error("Payment Error:", error);
@@ -235,10 +395,25 @@
         };
 
         paypalConfig.onAdditionalDetails = async (state, component) => {
-            console.log("PayPal Additional Details:", state.data);
+            console.log("[PayPal] onAdditionalDetails");
             component.setStatus("loading");
 
+            // Capture PayPal order ID from details if available
+            if (state.data?.details?.orderID && !paypalOrderId) {
+                paypalOrderId = state.data.details.orderID;
+            }
+
             try {
+                // Check client-side if session has expired
+                if (enableSessionTimeout && sessionStartTime) {
+                    const elapsed = Date.now() - sessionStartTime;
+                    if (elapsed > timeoutMs) {
+                        handleSessionExpired();
+                        component.setStatus("ready");
+                        return;
+                    }
+                }
+
                 // Merge state.data with currentPaymentData to ensure we send the latest signature
                 const detailsRequest = { ...state.data };
                 if (currentPaymentData) {
@@ -248,13 +423,26 @@
                 const response = await fetch("/api/adyen/payments/details", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ data: detailsRequest }),
+                    body: JSON.stringify({
+                        data: detailsRequest,
+                        // Include session info for server-side validation
+                        checkoutStartTime: sessionStartTime,
+                        timeoutMinutes: enableSessionTimeout
+                            ? timeoutMinutes
+                            : null,
+                    }),
                 });
 
                 const result = await response.json();
                 console.log("Final Adyen Result:", result);
 
                 if (!response.ok) {
+                    // Check if this is a session expiration from the server
+                    if (result.resultCode === "SESSION_EXPIRED") {
+                        handleSessionExpired();
+                        component.setStatus("ready");
+                        return;
+                    }
                     throw new Error(result.error || "Payment details failed");
                 }
 
@@ -265,6 +453,7 @@
                     component.setStatus("ready");
                     paymentSuccess = true;
                     paymentResult = result;
+                    clearSessionTimer(); // Clear timer on success
 
                     // Attempt to fetch full address details from PayPal if we have the Order ID
                     if (paypalOrderId) {
@@ -277,20 +466,12 @@
                                 `/api/paypal/order/${paypalOrderId}`,
                             );
                             const ppOrder = await ppResponse.json();
-                            console.log(
-                                "[DEBUG] Fetched PayPal Order:",
-                                ppOrder,
-                            );
 
                             if (
                                 ppOrder.purchase_units?.[0]?.shipping?.address
                             ) {
                                 const ppAddress =
                                     ppOrder.purchase_units[0].shipping.address;
-                                console.log(
-                                    "[DEBUG] Full PayPal Address from Fetch:",
-                                    ppAddress,
-                                );
 
                                 // Update display with high-fidelity address
                                 finalShippingAddress = {
@@ -318,11 +499,42 @@
         };
 
         paypalConfig.onCancel = (data, component) => {
-            console.log("PayPal Cancelled:", data);
+            console.log("[PayPal] onCancel");
+
+            // Enhanced cancellation logging
+            logCancellation("user_cancel", {
+                reason: "User closed PayPal popup",
+                paypalData: data,
+                orderID: data?.orderID || paypalOrderId,
+            });
+
+            // Clear session timer on cancel
+            clearSessionTimer();
         };
 
         paypalConfig.onError = (error, component) => {
-            console.error("PayPal Error:", error);
+            console.log("[PayPal] onError");
+            // PayPal triggers onError with "CANCEL" when user closes the popup
+            // This is not a real error, just a cancellation
+            const errorString = error?.toString?.() || String(error);
+            const isCancelError =
+                errorString.includes("CANCEL") ||
+                error?.message?.includes?.("CANCEL");
+
+            if (isCancelError) {
+                // This is a user cancellation, not an actual error
+                logCancellation("user_cancel_error", {
+                    reason: "User closed PayPal popup (onError CANCEL)",
+                    errorType: "CANCEL",
+                });
+            } else {
+                // This is a real error
+                console.error("PayPal Error:", error);
+                logCancellation("error", {
+                    reason: "PayPal error occurred",
+                    error: errorString,
+                });
+            }
         };
 
         // Create PayPal component with the configuration
@@ -354,6 +566,8 @@
 
     // Watch disableShipping to trigger the reactive statement above
     $: disableShipping, void 0;
+
+    // Note: Session timer is now started in onSubmit when PayPal button is clicked
 
     onMount(async () => {
         try {
@@ -526,6 +740,57 @@
                                             >
                                             <p class="text-xs text-gray-500">
                                                 Prevent editing in popup
+                                            </p>
+                                        </div>
+                                    </label>
+                                {/if}
+
+                                <!-- Session Timeout Divider -->
+                                <div class="border-t border-gray-200 my-3 pt-3">
+                                    <p
+                                        class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2"
+                                    >
+                                        Session Timeout
+                                    </p>
+                                </div>
+
+                                <label
+                                    class="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        bind:checked={enableSessionTimeout}
+                                        class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                                    />
+                                    <div class="ml-3">
+                                        <span
+                                            class="block text-sm font-medium text-gray-900"
+                                            >Enable Session Timeout</span
+                                        >
+                                        <p class="text-xs text-gray-500">
+                                            Expire checkout after {timeoutMinutes}
+                                            min
+                                        </p>
+                                    </div>
+                                </label>
+
+                                {#if enableSessionTimeout}
+                                    <label
+                                        class="flex items-center p-2 rounded hover:bg-amber-50 cursor-pointer pl-6 border border-amber-200 bg-amber-50"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            bind:checked={useTestTimeout}
+                                            class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 border-amber-300"
+                                        />
+                                        <div class="ml-3">
+                                            <span
+                                                class="block text-sm font-medium text-amber-800"
+                                                >⚡ Test Mode (30 sec timeout)</span
+                                            >
+                                            <p class="text-xs text-amber-600">
+                                                For testing timeout
+                                                functionality
                                             </p>
                                         </div>
                                     </label>
@@ -741,34 +1006,61 @@
             <!-- Right Column: Payment and Messages -->
             <div class="space-y-6">
                 {#if !paymentSuccess}
-                    <!-- PayPal Button Container -->
-                    <div
-                        class="p-5 bg-white rounded-lg border border-gray-200 sticky top-6"
-                    >
-                        <div class="flex items-center gap-2 mb-4">
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="h-5 w-5 text-blue-600"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                                />
-                            </svg>
-                            <h4 class="font-bold text-gray-900 text-lg">
-                                Complete Payment
-                            </h4>
-                        </div>
+                    <!-- Session Expired Overlay -->
+                    {#if sessionExpired}
                         <div
-                            bind:this={adyenContainer}
-                            class="adyen-container w-64 mx-auto"
-                        ></div>
-                    </div>
+                            class="p-5 bg-white rounded-lg border border-gray-200"
+                        >
+                            <p class="text-gray-700 mb-2">
+                                <span class="font-medium"
+                                    >Session timed out</span
+                                >
+                            </p>
+                            {#if paypalOrderId}
+                                <p class="text-sm text-gray-500 mb-4">
+                                    Order ID: <span class="font-mono"
+                                        >{paypalOrderId}</span
+                                    >
+                                </p>
+                            {/if}
+                            <button
+                                onclick={resetSession}
+                                class="px-4 py-2 bg-gray-900 text-white text-sm rounded hover:bg-gray-800 transition-colors"
+                            >
+                                Restart Checkout
+                            </button>
+                        </div>
+                    {:else}
+                        <!-- PayPal Button Container -->
+                        <div
+                            class="p-5 bg-white rounded-lg border border-gray-200 sticky top-6"
+                        >
+                            <div class="flex items-center gap-2 mb-4">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    class="h-5 w-5 text-blue-600"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                                    />
+                                </svg>
+                                <h4 class="font-bold text-gray-900 text-lg">
+                                    Complete Payment
+                                </h4>
+                            </div>
+
+                            <div
+                                bind:this={adyenContainer}
+                                class="adyen-container w-64 mx-auto"
+                            ></div>
+                        </div>
+                    {/if}
 
                     {#if errorMessage}
                         <div
