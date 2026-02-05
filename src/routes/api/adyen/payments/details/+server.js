@@ -8,7 +8,31 @@ import { adyenRequest } from '$lib/server/adyen.js';
 export async function POST({ request }) {
     try {
         const body = await request.json();
-        const { data } = body; // state.data from frontend onAdditionalDetails
+        const { data, checkoutStartTime, timeoutMinutes } = body;
+
+        // Server-side session timeout validation
+        if (checkoutStartTime && timeoutMinutes) {
+            const elapsed = Date.now() - checkoutStartTime;
+            const timeoutMs = timeoutMinutes * 60 * 1000;
+
+            if (elapsed > timeoutMs) {
+                const elapsedMinutes = Math.floor(elapsed / 60000);
+                console.log(`[Session] Payment rejected - checkout session expired. Elapsed: ${elapsedMinutes} min, Timeout: ${timeoutMinutes} min`);
+
+                return json(
+                    {
+                        error: 'Checkout session expired',
+                        resultCode: 'SESSION_EXPIRED',
+                        message: `Your checkout session has expired after ${timeoutMinutes} minutes. Please start a new checkout.`,
+                        elapsedMinutes,
+                        timeoutMinutes
+                    },
+                    { status: 400 }
+                );
+            }
+
+            console.log(`[Session] Payment within timeout. Elapsed: ${Math.floor(elapsed / 60000)} min, Timeout: ${timeoutMinutes} min`);
+        }
 
         const response = await adyenRequest('/payments/details', data);
 
