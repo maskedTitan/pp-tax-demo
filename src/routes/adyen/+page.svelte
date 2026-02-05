@@ -14,23 +14,16 @@
     let disableShipping = true;
 
     // Session Timeout Configuration
-    const PRODUCTION_TIMEOUT_MINUTES = 60; // 60 minutes for production
-    const TEST_TIMEOUT_MINUTES = 0.5; // 30 seconds for testing
+    const TIMEOUT_SECONDS = 30;
     let enableSessionTimeout = true;
-    let useTestTimeout = false; // Toggle for shorter test timeout
     let sessionStartTime = null;
     let sessionTimeoutId = null;
     let countdownIntervalId = null;
-    let remainingTime = null; // in seconds
+    let remainingTime = null;
     let sessionExpired = false;
-    let showTimeoutWarning = false;
 
-    // Get current timeout duration in milliseconds
-    $: timeoutMinutes = useTestTimeout
-        ? TEST_TIMEOUT_MINUTES
-        : PRODUCTION_TIMEOUT_MINUTES;
-    $: timeoutMs = timeoutMinutes * 60 * 1000;
-    $: warningThresholdMs = useTestTimeout ? 30 * 1000 : 5 * 60 * 1000; // 30s for test, 5min for prod
+    // Timeout in milliseconds
+    $: timeoutMs = TIMEOUT_SECONDS * 1000;
 
     // UI State for collapsibles
     let showCheckoutOptions = true;
@@ -68,7 +61,6 @@
 
         sessionStartTime = Date.now();
         sessionExpired = false;
-        showTimeoutWarning = false;
         remainingTime = Math.floor(timeoutMs / 1000);
 
         // Set up the expiration timeout
@@ -84,14 +76,6 @@
                     0,
                     Math.floor((timeoutMs - elapsed) / 1000),
                 );
-
-                // Show warning when approaching timeout
-                if (
-                    elapsed >= timeoutMs - warningThresholdMs &&
-                    !showTimeoutWarning
-                ) {
-                    showTimeoutWarning = true;
-                }
             }
         }, 1000);
     }
@@ -109,19 +93,12 @@
 
     function handleSessionExpired() {
         sessionExpired = true;
-        showTimeoutWarning = false;
         remainingTime = 0;
         clearSessionTimer();
 
-        // Log the timeout event
-        const timeoutDisplay =
-            timeoutMinutes < 1
-                ? `${Math.round(timeoutMinutes * 60)} seconds`
-                : `${timeoutMinutes} minutes`;
-
         logCancellation("timeout", {
             reason: "Session timeout",
-            sessionDuration: timeoutDisplay,
+            sessionDuration: `${TIMEOUT_SECONDS} seconds`,
             startTime: sessionStartTime
                 ? new Date(sessionStartTime).toISOString()
                 : null,
@@ -129,7 +106,7 @@
         });
 
         console.log(
-            `[Session Expired] Order: ${paypalOrderId || "N/A"}, Duration: ${timeoutDisplay}`,
+            `[Session Expired] Order: ${paypalOrderId || "N/A"}, Duration: ${TIMEOUT_SECONDS}s`,
         );
 
         // Unmount the PayPal component to prevent further interaction
@@ -144,7 +121,6 @@
 
     function resetSession() {
         sessionExpired = false;
-        showTimeoutWarning = false;
         sessionStartTime = null;
         remainingTime = null;
         clearSessionTimer();
@@ -428,7 +404,7 @@
                         // Include session info for server-side validation
                         checkoutStartTime: sessionStartTime,
                         timeoutMinutes: enableSessionTimeout
-                            ? timeoutMinutes
+                            ? TIMEOUT_SECONDS / 60
                             : null,
                     }),
                 });
@@ -768,33 +744,11 @@
                                             >Enable Session Timeout</span
                                         >
                                         <p class="text-xs text-gray-500">
-                                            Expire checkout after {timeoutMinutes}
-                                            min
+                                            Expire checkout after {TIMEOUT_SECONDS}
+                                            seconds
                                         </p>
                                     </div>
                                 </label>
-
-                                {#if enableSessionTimeout}
-                                    <label
-                                        class="flex items-center p-2 rounded hover:bg-amber-50 cursor-pointer pl-6 border border-amber-200 bg-amber-50"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            bind:checked={useTestTimeout}
-                                            class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 border-amber-300"
-                                        />
-                                        <div class="ml-3">
-                                            <span
-                                                class="block text-sm font-medium text-amber-800"
-                                                >⚡ Test Mode (30 sec timeout)</span
-                                            >
-                                            <p class="text-xs text-amber-600">
-                                                For testing timeout
-                                                functionality
-                                            </p>
-                                        </div>
-                                    </label>
-                                {/if}
                             </div>
                         {/if}
                     </div>
