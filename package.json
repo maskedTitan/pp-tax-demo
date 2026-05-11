@@ -20,6 +20,8 @@
 	},
 	"dependencies": {
 		"@adyen/adyen-web": "^6.26.0",
-		"@paypal/paypal-js": "^9.0.1"
+		"@paypal/paypal-js": "^9.0.1",
+		"braintree": "^3.36.0",
+		"braintree-web": "^3.141.0"
 	}
 }
