@@ -159,7 +159,7 @@
             const sdkConfig = {
                 currency: 'USD'
             };
-            if (isRecurring || zeroDollarAuth) {
+            if (zeroDollarAuth) {
                 sdkConfig.vault = true;
             } else {
                 sdkConfig.intent = 'capture';
@@ -169,37 +169,30 @@
 
             if (window.paypal && paypalContainer) {
                 addLog("Rendering PayPal Buttons...");
-                window.paypal.Buttons({
-                    fundingSource: window.paypal.FUNDING.PAYPAL,
-                    style: {
-                        height: 48,
-                        shape: 'rect',
-                        color: 'black'
-                    },
-                    createOrder: function () {
-                        addLog("PayPal button clicked: createOrder called");
-                        if (enableSessionTimeout && !sessionStartTime) startSessionTimer();
-                        
-                        const flow = isRecurring || zeroDollarAuth ? 'vault' : 'checkout';
-                        const amount = zeroDollarAuth ? '0.00' : currentTotal.toString();
-                        
-                        const paymentConfig = {
-                            flow: flow,
-                            currency: 'USD'
-                        };
-                        
-                        if (flow === 'checkout') {
-                            paymentConfig.intent = 'capture';
-                            paymentConfig.amount = amount;
-                            paymentConfig.displayName = 'SpaceX Parts Store';
-                        }
 
+                // Only $0 auth is true vault mode (no amount shown, billing agreement only).
+                // isRecurring uses checkout flow + requestBillingAgreement to show the amount
+                // while still setting up a vault token alongside the transaction.
+                const isVaultMode = zeroDollarAuth;
+
+                function buildPaymentConfig() {
+                    const flow = isVaultMode ? 'vault' : 'checkout';
+                    const config = { flow, currency: 'USD' };
+                    if (flow === 'checkout') {
+                        config.intent = 'capture';
+                        config.amount = currentTotal.toString();
+                        config.displayName = 'SpaceX Parts Store';
+                        if (isRecurring) {
+                            config.requestBillingAgreement = true;
+                        }
+                    }
+                    if (!isVaultMode) {
                         if (disableShipping) {
-                            paymentConfig.enableShippingAddress = false;
+                            config.enableShippingAddress = false;
                         } else {
-                            paymentConfig.enableShippingAddress = true;
+                            config.enableShippingAddress = true;
                             if (useServiceAddress) {
-                                paymentConfig.shippingAddressOverride = {
+                                config.shippingAddressOverride = {
                                     recipientName: `${serviceAddress.firstName} ${serviceAddress.lastName}`,
                                     line1: serviceAddress.street,
                                     line2: serviceAddress.houseNumberOrName,
@@ -209,11 +202,9 @@
                                     state: serviceAddress.stateOrProvince,
                                     phone: '1234567890'
                                 };
-                                paymentConfig.shippingAddressEditable = !lockAddress;
+                                config.shippingAddressEditable = !lockAddress;
                             }
                         }
-
-                        // Local state preview
                         if (!finalShippingAddress && useServiceAddress && !disableShipping) {
                             finalShippingAddress = {
                                 street: `${serviceAddress.houseNumberOrName} ${serviceAddress.street}`,
@@ -223,46 +214,24 @@
                                 countryCode: serviceAddress.country,
                             };
                         }
+                    }
+                    return config;
+                }
 
-                        addLog("Calling paypalInstance.createPayment with config", paymentConfig);
-                        return paypalInstance.createPayment(paymentConfig);
-                    },
-                    onShippingChange: function (data, actions) {
-                        addLog("PayPal onShippingChange triggered", data);
-                        const stateCode = data.shipping_address?.state || data.shippingAddress?.state;
-                        const countryCode = data.shipping_address?.country_code || data.shippingAddress?.countryCode;
-
-                        if (countryCode && countryCode !== 'US') {
-                            addLog("Rejecting shipping change: unsupported country", { countryCode });
-                            return actions.reject(data.errors.COUNTRY_ERROR);
-                        }
-                        if (!stateCode || disableShipping) {
-                            addLog("Resolving shipping change directly");
-                            return actions.resolve();
-                        }
-
-                        const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
-                        addLog("Updating payment with new total", { amount: newTotal });
-
-                        return paypalInstance.updatePayment({
-                            amount: newTotal,
-                            currency: 'USD',
-                            paymentId: data.paymentId || data.orderID,
-                            shippingAddress: data.shippingAddress || data.shipping_address
-                        });
-                    },
-                    onApprove: function (data, actions) {
+                const buttonConfig = {
+                    fundingSource: window.paypal.FUNDING.PAYPAL,
+                    style: { height: 48, shape: 'rect', color: 'black' },
+                    onApprove: async function (data, actions) {
                         addLog("PayPal onApprove triggered", data);
-                        return paypalInstance.tokenizePayment(data, async function (err, payload) {
-                             if (err) {
-                                  addLog("Error tokenizing payment", err);
-                                  errorMessage = err.message || "Failed to tokenize payment";
-                                  return;
-                             }
-                             addLog("Payment tokenized successfully", payload);
-                             paypalOrderId = payload.nonce;
-                             await submitNonceToServer(payload);
-                        });
+                        try {
+                            const payload = await paypalInstance.tokenizePayment(data);
+                            addLog("Payment tokenized successfully", payload);
+                            paypalOrderId = payload.nonce;
+                            await submitNonceToServer(payload);
+                        } catch (err) {
+                            addLog("Error tokenizing payment", err);
+                            errorMessage = err.message || "Failed to tokenize payment";
+                        }
                     },
                     onCancel: function (data) {
                         addLog("PayPal checkout canceled", data);
@@ -273,7 +242,50 @@
                         console.error('PayPal Error:', err);
                         errorMessage = err.message || "An error occurred with PayPal.";
                     }
-                }).render(paypalContainer);
+                };
+
+                // intent=tokenize (vault mode) requires createBillingAgreement, not createOrder.
+                // onShippingChange is only valid in checkout flow.
+                if (isVaultMode) {
+                    buttonConfig.createBillingAgreement = function () {
+                        addLog("createBillingAgreement called — vault flow");
+                        if (enableSessionTimeout && !sessionStartTime) startSessionTimer();
+                        const config = buildPaymentConfig();
+                        addLog("Calling paypalInstance.createPayment", config);
+                        return paypalInstance.createPayment(config);
+                    };
+                } else {
+                    buttonConfig.createOrder = function () {
+                        addLog("createOrder called — checkout flow");
+                        if (enableSessionTimeout && !sessionStartTime) startSessionTimer();
+                        const config = buildPaymentConfig();
+                        addLog("Calling paypalInstance.createPayment", config);
+                        return paypalInstance.createPayment(config);
+                    };
+                    buttonConfig.onShippingChange = function (data, actions) {
+                        addLog("PayPal onShippingChange triggered", data);
+                        const stateCode = data.shipping_address?.state || data.shippingAddress?.state;
+                        const countryCode = data.shipping_address?.country_code || data.shippingAddress?.countryCode;
+                        if (countryCode && countryCode !== 'US') {
+                            addLog("Rejecting shipping change: unsupported country", { countryCode });
+                            return actions.reject(data.errors.COUNTRY_ERROR);
+                        }
+                        if (!stateCode || disableShipping) {
+                            addLog("Resolving shipping change directly");
+                            return actions.resolve();
+                        }
+                        const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
+                        addLog("Updating payment with new total", { amount: newTotal });
+                        return paypalInstance.updatePayment({
+                            amount: newTotal,
+                            currency: 'USD',
+                            paymentId: data.paymentId || data.orderID,
+                            shippingAddress: data.shippingAddress || data.shipping_address
+                        });
+                    };
+                }
+
+                window.paypal.Buttons(buttonConfig).render(paypalContainer);
                 addLog("PayPal Buttons rendered successfully");
             }
         } catch (err) {
