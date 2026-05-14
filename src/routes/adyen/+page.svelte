@@ -15,7 +15,7 @@
 
     // Session Timeout Configuration
     const TIMEOUT_SECONDS = 30;
-    let enableSessionTimeout = true;
+    let enableSessionTimeout = false;
     let sessionStartTime = null;
     let sessionTimeoutId = null;
     let countdownIntervalId = null;
