@@ -178,13 +178,10 @@
                     onApprove,
                     ...(!disableShipping && {
                         onShippingAddressChange: (data) => {
+                            // No shippingAddressOverride in v6 — always update based on buyer's address
                             const stateCode = data.shippingAddress?.stateOrProvinceCode || data.shippingAddress?.state;
                             const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
-                            if (newTotal === currentTotal.toString()) {
-                                addLog("Tax unchanged, resolving immediately", { stateCode });
-                                return Promise.resolve();
-                            }
-                            addLog("Updating payment for new state", { stateCode, newTotal });
+                            addLog("onShippingAddressChange — updating amount", { stateCode, newTotal });
                             return paypalV6Instance.updatePayment({
                                 paymentId: data.orderId,
                                 amount: newTotal,
@@ -203,13 +200,10 @@
                     onApprove,
                     ...(!disableShipping && {
                         onShippingAddressChange: (data) => {
+                            // No shippingAddressOverride in v6 — always update based on buyer's address
                             const stateCode = data.shippingAddress?.stateOrProvinceCode || data.shippingAddress?.state;
                             const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
-                            if (newTotal === currentTotal.toString()) {
-                                addLog("Tax unchanged, resolving immediately", { stateCode });
-                                return Promise.resolve();
-                            }
-                            addLog("Updating payment for new state", { stateCode, newTotal });
+                            addLog("onShippingAddressChange — updating amount", { stateCode, newTotal });
                             return paypalV6Instance.updatePayment({
                                 paymentId: data.orderId,
                                 amount: newTotal,
