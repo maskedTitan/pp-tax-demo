@@ -6,6 +6,7 @@
     let errorMessage = "";
     let paymentSuccess = false;
     let paymentResult = null;
+    let paypalLoading = true;
 
     // Developer Logs
     let developerLogs = [];
@@ -127,6 +128,7 @@
     });
 
     async function setupBraintreePaypal() {
+        paypalLoading = true;
         try {
             addLog("Initializing Braintree PayPal setup...");
             if (!braintreeClientToken) {
@@ -275,6 +277,10 @@
                             return actions.resolve();
                         }
                         const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
+                        if (newTotal === currentTotal.toString()) {
+                            addLog("Tax unchanged, resolving immediately", { stateCode, newTotal });
+                            return actions.resolve();
+                        }
                         addLog("Updating payment with new total", { amount: newTotal });
                         return paypalInstance.updatePayment({
                             amount: newTotal,
@@ -285,10 +291,12 @@
                     };
                 }
 
-                window.paypal.Buttons(buttonConfig).render(paypalContainer);
+                await window.paypal.Buttons(buttonConfig).render(paypalContainer);
+                paypalLoading = false;
                 addLog("PayPal Buttons rendered successfully");
             }
         } catch (err) {
+            paypalLoading = false;
             addLog("Braintree Initialization Error", { message: err.message });
             console.error('Braintree Initialization Error:', err);
             errorMessage = err.message || "Failed to initialize Braintree. Check configuration.";
@@ -558,7 +566,18 @@
                                 </div>
                             {/if}
 
-                            <div bind:this={paypalContainer} class="mt-6 mx-auto w-full max-w-[260px]"></div>
+                            <div class="mt-6 mx-auto w-full max-w-[260px] relative">
+                                {#if paypalLoading}
+                                    <div class="flex items-center justify-center h-12 gap-2 text-gray-400">
+                                        <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                        </svg>
+                                        <span class="text-sm">Loading payment...</span>
+                                    </div>
+                                {/if}
+                                <div bind:this={paypalContainer} class:hidden={paypalLoading}></div>
+                            </div>
                         </div>
                     {/if}
 

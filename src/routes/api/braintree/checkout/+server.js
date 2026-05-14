@@ -48,10 +48,16 @@ export async function POST({ request }) {
         }
 
         if (result.success) {
+            const tx = result.transaction;
+            const vaultToken =
+                result.paymentMethod?.token ||
+                tx?.paypalAccount?.token ||
+                tx?.paypalAccount?.implicitlyVaultedPaymentMethodToken ||
+                null;
             return json({
                 success: true,
-                transactionId: result.transaction?.id || null,
-                vaultToken: result.paymentMethod?.token || result.transaction?.paypalAccount?.token || null
+                transactionId: tx?.id || null,
+                vaultToken,
             });
         } else {
             return json({ success: false, error: result.message }, { status: 400 });
