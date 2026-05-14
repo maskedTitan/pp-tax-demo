@@ -375,12 +375,12 @@
                                 </p>
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label class="block text-xs font-semibold text-gray-700 mb-1">State</label>
-                                        <input class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm uppercase" type="text" bind:value={serviceAddress.stateOrProvince} maxlength="2" />
+                                        <label for="v6-state" class="block text-xs font-semibold text-gray-700 mb-1">State</label>
+                                        <input id="v6-state" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm uppercase" type="text" bind:value={serviceAddress.stateOrProvince} maxlength="2" />
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-semibold text-gray-700 mb-1">Postal Code</label>
-                                        <input class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm" type="text" bind:value={serviceAddress.postalCode} />
+                                        <label for="v6-postal" class="block text-xs font-semibold text-gray-700 mb-1">Postal Code</label>
+                                        <input id="v6-postal" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm" type="text" bind:value={serviceAddress.postalCode} />
                                     </div>
                                 </div>
                             </div>
@@ -443,13 +443,12 @@
                                     <!-- v6 uses a custom element + session.start() instead of Buttons().render() -->
                                     <button
                                         onclick={handlePayPalClick}
-                                        class="w-full h-12 bg-[#ffc439] hover:bg-[#f0b429] rounded-md flex items-center justify-center gap-2 transition-colors font-bold text-[#003087] text-sm"
+                                        class="w-full h-12 bg-[#ffc439] hover:bg-[#f0b429] rounded-md flex items-center justify-center gap-2 transition-colors"
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 101 32" class="h-5" fill="#003087">
-                                            <path d="M12.237 2.6H5.207a.952.952 0 0 0-.941.804L1.243 23.937a.57.57 0 0 0 .563.658h3.355a.952.952 0 0 0 .941-.803l.79-5.007a.952.952 0 0 1 .94-.803h2.224c4.624 0 7.294-2.237 7.991-6.672.314-1.941.013-3.467-.893-4.534-.995-1.172-2.76-1.776-5.917-1.776zm.811 6.574c-.383 2.515-2.306 2.515-4.166 2.515h-1.058l.742-4.7a.571.571 0 0 1 .565-.482h.484c1.267 0 2.465 0 3.083.722.37.431.482 1.071.35 1.945z"/>
-                                            <path d="M35.357 9.089h-3.364a.573.573 0 0 0-.565.482l-.145.921-.23-.334c-.712-1.034-2.301-1.38-3.886-1.38-3.636 0-6.74 2.754-7.347 6.617-.315 1.926.133 3.766 1.215 5.049 1 1.187 2.42 1.68 4.116 1.68 2.93 0 4.558-1.883 4.558-1.883l-.147.913a.57.57 0 0 0 .562.659h3.032a.952.952 0 0 0 .94-.804l1.82-11.52a.57.57 0 0 0-.559-.62zm-4.695 6.405c-.318 1.882-1.817 3.146-3.722 3.146-.958 0-1.725-.308-2.217-.89-.49-.578-.673-1.401-.52-2.317.298-1.865 1.82-3.166 3.695-3.166.937 0 1.701.311 2.204.898.505.591.703 1.419.56 2.329z"/>
-                                        </svg>
-                                        {zeroDollarAuth ? 'Save with PayPal' : isRecurring ? 'Subscribe with PayPal' : 'Pay with PayPal'}
+                                        <span class="font-bold text-[#003087] text-base tracking-tight">
+                                            {zeroDollarAuth ? 'Save with' : isRecurring ? 'Subscribe with' : 'Pay with'}
+                                        </span>
+                                        <span class="font-extrabold italic text-[#003087] text-base tracking-tight">PayPal</span>
                                     </button>
                                 {/if}
                             </div>
