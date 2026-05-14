@@ -440,16 +440,13 @@
                                         <span class="text-sm">Loading payment...</span>
                                     </div>
                                 {:else}
-                                    <!-- v6 uses a custom element + session.start() instead of Buttons().render() -->
-                                    <button
+                                    <!-- Official PayPal v6 custom element — renders the real PayPal button -->
+                                    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+                                    <paypal-button
+                                        type={zeroDollarAuth || isRecurring ? undefined : 'pay'}
                                         onclick={handlePayPalClick}
-                                        class="w-full h-12 bg-[#ffc439] hover:bg-[#f0b429] rounded-md flex items-center justify-center gap-2 transition-colors"
-                                    >
-                                        <span class="font-bold text-[#003087] text-base tracking-tight">
-                                            {zeroDollarAuth ? 'Save with' : isRecurring ? 'Subscribe with' : 'Pay with'}
-                                        </span>
-                                        <span class="font-extrabold italic text-[#003087] text-base tracking-tight">PayPal</span>
-                                    </button>
+                                        style="width:100%;display:block;"
+                                    ></paypal-button>
                                 {/if}
                             </div>
                         </div>
