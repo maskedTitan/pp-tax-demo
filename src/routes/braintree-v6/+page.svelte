@@ -266,7 +266,7 @@
     }
 
     let isInitialMountDone = false;
-    $: isRecurring, zeroDollarAuth, disableShipping, rebuildSession();
+    $: isRecurring, zeroDollarAuth, disableShipping, currentTotal, rebuildSession();
     function rebuildSession() {
         if (!isInitialMountDone || !braintreeClientToken || !paypalV6Instance || paymentSuccess) return;
         buildSession();
