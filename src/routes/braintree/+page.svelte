@@ -188,34 +188,31 @@
                             config.requestBillingAgreement = true;
                         }
                     }
-                    if (!isVaultMode) {
-                        if (disableShipping) {
-                            config.enableShippingAddress = false;
-                        } else {
-                            config.enableShippingAddress = true;
-                            if (useServiceAddress) {
-                                config.shippingAddressOverride = {
-                                    recipientName: `${serviceAddress.firstName} ${serviceAddress.lastName}`,
-                                    line1: serviceAddress.street,
-                                    line2: serviceAddress.houseNumberOrName,
-                                    city: serviceAddress.city,
-                                    countryCode: serviceAddress.country,
-                                    postalCode: serviceAddress.postalCode,
-                                    state: serviceAddress.stateOrProvince,
-                                    phone: '1234567890'
-                                };
-                                config.shippingAddressEditable = !lockAddress;
-                            }
-                        }
-                        if (!finalShippingAddress && useServiceAddress && !disableShipping) {
-                            finalShippingAddress = {
-                                street: `${serviceAddress.houseNumberOrName} ${serviceAddress.street}`,
+                    if (disableShipping) {
+                        config.enableShippingAddress = false;
+                    } else {
+                        config.enableShippingAddress = true;
+                        if (useServiceAddress) {
+                            config.shippingAddressOverride = {
+                                recipientName: `${serviceAddress.firstName} ${serviceAddress.lastName}`,
+                                line1: `${serviceAddress.houseNumberOrName} ${serviceAddress.street}`.trim(),
+                                line2: '',
                                 city: serviceAddress.city,
-                                state: serviceAddress.stateOrProvince,
-                                postalCode: serviceAddress.postalCode,
                                 countryCode: serviceAddress.country,
+                                postalCode: serviceAddress.postalCode,
+                                state: serviceAddress.stateOrProvince
                             };
+                            config.shippingAddressEditable = !lockAddress;
                         }
+                    }
+                    if (!finalShippingAddress && useServiceAddress && !disableShipping) {
+                        finalShippingAddress = {
+                            street: `${serviceAddress.houseNumberOrName} ${serviceAddress.street}`.trim(),
+                            city: serviceAddress.city,
+                            state: serviceAddress.stateOrProvince,
+                            postalCode: serviceAddress.postalCode,
+                            countryCode: serviceAddress.country,
+                        };
                     }
                     return config;
                 }
@@ -268,7 +265,7 @@
                         addLog("PayPal onShippingChange triggered", data);
                         const stateCode = data.shipping_address?.state || data.shippingAddress?.state;
                         const countryCode = data.shipping_address?.country_code || data.shippingAddress?.countryCode;
-                        if (countryCode && countryCode !== 'US') {
+                        if (countryCode && countryCode !== 'US' && countryCode !== 'AU') {
                             addLog("Rejecting shipping change: unsupported country", { countryCode });
                             return actions.reject(data.errors.COUNTRY_ERROR);
                         }
