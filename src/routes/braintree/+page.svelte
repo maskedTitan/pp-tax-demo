@@ -566,14 +566,13 @@
                                 </div>
                             {/if}
 
-                            <div class="mt-6 mx-auto w-full max-w-[260px] relative">
+                            <div class="mt-6 mx-auto w-full max-w-[200px] relative">
                                 {#if paypalLoading}
-                                    <div class="flex items-center justify-center h-12 gap-2 text-gray-400">
-                                        <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                                        </svg>
-                                        <span class="text-sm">Loading payment...</span>
+                                    <div class="flex items-center justify-center h-12 w-full">
+                                        <div class="relative flex items-center justify-center w-8 h-8">
+                                            <div class="absolute inset-0 rounded-full border-[3px] border-gray-200"></div>
+                                            <div class="absolute inset-0 rounded-full border-[3px] border-black border-t-transparent animate-[spin_0.8s_linear_infinite]"></div>
+                                        </div>
                                     </div>
                                 {/if}
                                 <div bind:this={paypalContainer} class:hidden={paypalLoading}></div>

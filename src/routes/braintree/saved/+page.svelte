@@ -417,14 +417,19 @@
                         </h2>
 
                         {#if phase === 'loading'}
-                            <div class="text-sm text-gray-500 animate-pulse">Initializing...</div>
+                            <div class="flex items-center justify-center h-12 w-full">
+                                <div class="relative flex items-center justify-center w-8 h-8">
+                                    <div class="absolute inset-0 rounded-full border-[3px] border-gray-200"></div>
+                                    <div class="absolute inset-0 rounded-full border-[3px] border-black border-t-transparent animate-[spin_0.8s_linear_infinite]"></div>
+                                </div>
+                            </div>
 
                         {:else if phase === 'new-user'}
                             <!-- Vault Buttons flow -->
                             <p class="text-sm text-gray-600 mb-4">
                                 Connect your PayPal account to save it for future purchases.
                             </p>
-                            <div bind:this={paypalContainerRef} class="w-full max-w-[260px] mx-auto"></div>
+                            <div bind:this={paypalContainerRef} class="w-full max-w-[200px] mx-auto"></div>
 
                         {:else if phase === 'returning-user'}
                             <!-- Saved Payment Methods flow -->
