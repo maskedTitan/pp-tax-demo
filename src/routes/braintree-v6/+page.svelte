@@ -58,6 +58,7 @@
     let isInitialMount = true;
     let braintreeClientToken = null;
     let paypalV6Instance = null;
+    let sessionAmount = null;
 
     // --- Session timeout ---
     function startSessionTimer() {
@@ -141,6 +142,7 @@
         if (!paypalV6Instance) return;
 
         addLog("Building payment session...", { isRecurring, zeroDollarAuth, disableShipping });
+        sessionAmount = currentTotal.toString();
 
         const onApprove = async (data) => {
             addLog("onApprove triggered", data);
@@ -178,10 +180,14 @@
                     onApprove,
                     ...(!disableShipping && {
                         onShippingAddressChange: (data) => {
-                            // No shippingAddressOverride in v6 — always update based on buyer's address
                             const stateCode = data.shippingAddress?.stateOrProvinceCode || data.shippingAddress?.state;
                             const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
+                            if (newTotal === sessionAmount) {
+                                addLog("onShippingAddressChange — amount unchanged, skipping update", { stateCode, newTotal });
+                                return Promise.resolve();
+                            }
                             addLog("onShippingAddressChange — updating amount", { stateCode, newTotal });
+                            sessionAmount = newTotal;
                             return paypalV6Instance.updatePayment({
                                 paymentId: data.orderId,
                                 amount: newTotal,
@@ -200,10 +206,14 @@
                     onApprove,
                     ...(!disableShipping && {
                         onShippingAddressChange: (data) => {
-                            // No shippingAddressOverride in v6 — always update based on buyer's address
                             const stateCode = data.shippingAddress?.stateOrProvinceCode || data.shippingAddress?.state;
                             const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
+                            if (newTotal === sessionAmount) {
+                                addLog("onShippingAddressChange — amount unchanged, skipping update", { stateCode, newTotal });
+                                return Promise.resolve();
+                            }
                             addLog("onShippingAddressChange — updating amount", { stateCode, newTotal });
+                            sessionAmount = newTotal;
                             return paypalV6Instance.updatePayment({
                                 paymentId: data.orderId,
                                 amount: newTotal,
