@@ -128,6 +128,29 @@
 					</svg>
 					<span class="font-semibold">Saved PM</span>
 				</a>
+				<a
+					href="/braintree-v6"
+					class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 {currentPath ===
+					'/braintree-v6'
+						? 'bg-purple-50 text-purple-700'
+						: 'text-gray-600 hover:bg-gray-50'}"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-5 w-5"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M13 10V3L4 14h7v7l9-11h-7z"
+						/>
+					</svg>
+					<span class="font-semibold">BT v6</span>
+				</a>
 			</div>
 		</div>
 	</div>
