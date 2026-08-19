@@ -25,6 +25,7 @@ mutation VaultPayPalBillingAgreement($input: VaultPayPalBillingAgreementInput!) 
   vaultPayPalBillingAgreement(input: $input) {
     paymentMethod {
       id
+      legacyId
       usage
       details {
         ... on PayPalAccountDetails {
@@ -150,6 +151,7 @@ export async function POST({ request }) {
             customer: createdCustomer || null,
             paymentMethod: {
                 id: paymentMethod.id,
+                legacyId: paymentMethod.legacyId,
                 usage: paymentMethod.usage,
                 ...paymentMethod.details
             }

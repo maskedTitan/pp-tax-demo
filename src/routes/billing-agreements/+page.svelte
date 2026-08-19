@@ -142,6 +142,14 @@
 			billingAgreementId = data.id;
 			agreementDetails = data;
 			successMessage = `Billing Agreement created: ${billingAgreementId}`;
+
+			// Auto-populate customer form from PayPal payer info
+			const payer = data.payer?.payer_info;
+			if (payer) {
+				if (payer.first_name) customer.firstName = payer.first_name;
+				if (payer.last_name) customer.lastName = payer.last_name;
+				if (payer.email) customer.email = payer.email;
+			}
 		} catch (error) {
 			console.error("Error executing agreement:", error);
 			errorMessage = error.message;
@@ -484,6 +492,12 @@
 										<span class="font-semibold text-gray-700">Payment Method ID:</span>
 										<code class="bg-indigo-50 px-1.5 py-0.5 rounded font-mono text-xs ml-1">{vaultResult.id}</code>
 									</p>
+									{#if vaultResult.legacyId}
+										<p class="text-xs">
+											<span class="font-semibold text-gray-700">Payment Method Token:</span>
+											<code class="bg-indigo-50 px-1.5 py-0.5 rounded font-mono text-xs ml-1">{vaultResult.legacyId}</code>
+										</p>
+									{/if}
 									{#if vaultResult.usage}
 										<p class="text-xs">
 											<span class="font-semibold text-gray-700">Usage:</span>
