@@ -51,6 +51,44 @@
     let finalShippingAddress = null;
     let showJson = false;
 
+    // Charge Token State
+    let chargeTokenId = '';
+    let chargeAmount = '1.00';
+    let chargeShopperRef = 'test_shopper_1';
+    let chargeResult = null;
+    let chargeError = '';
+    let chargingToken = false;
+
+    async function chargeStoredToken() {
+        chargingToken = true;
+        chargeResult = null;
+        chargeError = '';
+
+        try {
+            const response = await fetch('/api/adyen/charge-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    storedPaymentMethodId: chargeTokenId,
+                    amount: chargeAmount,
+                    shopperReference: chargeShopperRef
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Charge failed');
+            }
+
+            chargeResult = result;
+        } catch (error) {
+            chargeError = error.message;
+        } finally {
+            chargingToken = false;
+        }
+    }
+
     // Placeholder configuration - in a real app these come from backend
     const clientKey = import.meta.env.VITE_ADYEN_CLIENT_KEY;
     const environment = "test";
@@ -371,6 +409,11 @@
                     paymentSuccess = true;
                     paymentResult = result;
                     clearSessionTimer(); // Clear timer on success
+
+                    // Extract recurring token if available
+                    if (isRecurring && result.additionalData?.['recurring.recurringDetailReference']) {
+                        chargeTokenId = result.additionalData['recurring.recurringDetailReference'];
+                    }
                 }
             } catch (error) {
                 console.error("Payment Error:", error);
@@ -443,6 +486,11 @@
                     paymentSuccess = true;
                     paymentResult = result;
                     clearSessionTimer(); // Clear timer on success
+
+                    // Extract recurring token if available
+                    if (isRecurring && result.additionalData?.['recurring.recurringDetailReference']) {
+                        chargeTokenId = result.additionalData['recurring.recurringDetailReference'];
+                    }
 
                     // Attempt to fetch full address details from PayPal if we have the Order ID
                     if (paypalOrderId) {
@@ -842,6 +890,73 @@
                         >
                             Place Another Order
                         </button>
+
+                        {#if isRecurring && paymentResult?.additionalData?.['recurring.recurringDetailReference']}
+                            <div class="mt-5 p-5 bg-white rounded-lg border border-purple-200">
+                                <div class="flex items-center gap-2 mb-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    <h4 class="font-bold text-gray-900">Charge Stored Token</h4>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-600 mb-1">Stored Payment Method ID</label>
+                                        <input
+                                            type="text"
+                                            bind:value={chargeTokenId}
+                                            class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono bg-gray-50"
+                                        />
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Amount (USD)</label>
+                                            <input
+                                                type="text"
+                                                bind:value={chargeAmount}
+                                                class="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Shopper Reference</label>
+                                            <input
+                                                type="text"
+                                                bind:value={chargeShopperRef}
+                                                class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onclick={chargeStoredToken}
+                                        disabled={chargingToken || !chargeTokenId}
+                                        class="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold py-2.5 px-4 rounded transition-all text-sm"
+                                    >
+                                        {chargingToken ? 'Charging...' : 'Charge Token'}
+                                    </button>
+
+                                    {#if chargeResult}
+                                        <div class="p-3 bg-green-50 border border-green-200 rounded text-sm">
+                                            <div class="flex justify-between items-center mb-1">
+                                                <span class="font-semibold text-gray-700">Result:</span>
+                                                <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-semibold">{chargeResult.resultCode}</span>
+                                            </div>
+                                            <div class="flex justify-between items-center">
+                                                <span class="font-semibold text-gray-700">PSP Reference:</span>
+                                                <code class="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">{chargeResult.pspReference}</code>
+                                            </div>
+                                        </div>
+                                    {/if}
+
+                                    {#if chargeError}
+                                        <div class="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                                            {chargeError}
+                                        </div>
+                                    {/if}
+                                </div>
+                            </div>
+                        {/if}
 
                         <div class="mt-6 pt-4 border-t border-emerald-200">
                             <button
