@@ -14,14 +14,8 @@ export async function POST({ request }) {
                 paymentMethodToken,
                 options: { submitForSettlement: true }
             });
-        } else if (isVault && amount === '0.00') {
-            // $0 Auth — vault without charging
-            result = await gateway.paymentMethod.create({
-                paymentMethodNonce: nonce,
-                options: { verifyCard: true }
-            });
-        } else if (createCustomer) {
-            // Saved PM vault: create a customer-linked payment method so the PMT
+        } else if (createCustomer || (isVault && amount === '0.00')) {
+            // Saved PM vault / $0 Auth: create a customer-linked payment method so the PMT
             // works with clientToken.generate({ paymentMethodToken }).
             const customerResult = await gateway.customer.create({
                 paymentMethodNonce: nonce

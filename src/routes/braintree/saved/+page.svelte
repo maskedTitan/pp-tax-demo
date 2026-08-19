@@ -1,6 +1,7 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
     import { calculateTax, calculateTotal, getTaxRate } from '$lib/taxRates.js';
+    import DeveloperLogs from "$lib/components/DeveloperLogs.svelte";
 
     const PRODUCT_SUBTOTAL = '10.00';
 
@@ -498,29 +499,6 @@
             </div>
         </div>
 
-        <!-- Developer Logs -->
-        <div class="bg-gray-900 rounded-lg overflow-hidden border border-gray-800">
-            <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-                <h3 class="font-mono text-sm font-bold text-green-400">Developer Logs</h3>
-                <button onclick={() => logs = []} class="text-xs text-gray-400 hover:text-white">Clear</button>
-            </div>
-            <div class="p-4 max-h-[400px] overflow-y-auto font-mono text-xs space-y-3">
-                {#if logs.length === 0}
-                    <div class="text-gray-500 italic">Initializing...</div>
-                {:else}
-                    {#each logs as entry}
-                        <div class="border-l-2 border-gray-700 pl-3">
-                            <div class="flex justify-between">
-                                <span class="text-blue-300 font-semibold">{entry.step}</span>
-                                <span class="text-gray-500 text-[10px]">{entry.timestamp}</span>
-                            </div>
-                            {#if entry.data}
-                                <pre class="mt-1 text-gray-300 bg-gray-800 p-2 rounded overflow-x-auto text-[10px]">{JSON.stringify(entry.data, null, 2)}</pre>
-                            {/if}
-                        </div>
-                    {/each}
-                {/if}
-            </div>
-        </div>
+        <DeveloperLogs bind:developerLogs={logs} />
     </div>
 </div>
