@@ -63,7 +63,7 @@ function explainVaultError(errors, preflight, isProduction, merchantAccountId) {
     const envVar = `BRAINTREE${isProduction ? '_PROD' : ''}_MERCHANT_ACCOUNT_ID`;
     const maNote = merchantAccountId
         ? `The import targeted merchant account "${merchantAccountId}" - confirm that is the one holding the PayPal link.`
-        : `${envVar} is not set, so the import used the gateway's default merchant account. This gateway's PayPal link lives on a different merchant account: set ${envVar} to it.`;
+        : `No merchant account was supplied and ${envVar} is not set, so the import used the gateway's default merchant account. This gateway's PayPal link lives on a different merchant account: enter it in the Merchant Account ID field, or set ${envVar} to it.`;
 
     if (preflight?.found === false) {
         return `PayPal (${envName}) does not recognize this billing agreement id under the REST app in PUBLIC_PAYPAL${isProduction ? '_PROD' : ''}_CLIENT_ID. Re-create the agreement, and confirm the environment toggle matches the one it was approved in.`;
@@ -85,7 +85,8 @@ function explainVaultError(errors, preflight, isProduction, merchantAccountId) {
 
 export async function POST({ request }) {
     try {
-        const { billingAgreementId, isProduction, customer, shippingAddress } = await request.json();
+        const body = await request.json();
+        const { billingAgreementId, isProduction, customer, shippingAddress } = body;
 
         if (!billingAgreementId) {
             return json({ error: 'billingAgreementId is required' }, { status: 400 });
@@ -93,9 +94,11 @@ export async function POST({ request }) {
 
         // Braintree resolves the agreement as the PayPal account linked to the merchant
         // account it imports against, so the import has to target the one holding that
-        // link. Configured per environment - callers do not supply it.
+        // link. Supplied per request, falling back to the configured default.
         const merchantAccountId =
-            (isProduction ? env.BRAINTREE_PROD_MERCHANT_ACCOUNT_ID : env.BRAINTREE_MERCHANT_ACCOUNT_ID) || null;
+            body.merchantAccountId ||
+            (isProduction ? env.BRAINTREE_PROD_MERCHANT_ACCOUNT_ID : env.BRAINTREE_MERCHANT_ACCOUNT_ID) ||
+            null;
 
         const publicKey = isProduction ? env.BRAINTREE_PROD_PUBLIC_KEY : env.BRAINTREE_PUBLIC_KEY;
         const privateKey = isProduction ? env.BRAINTREE_PROD_PRIVATE_KEY : env.BRAINTREE_PRIVATE_KEY;

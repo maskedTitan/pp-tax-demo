@@ -17,6 +17,9 @@
 	// Vault state
 	let vaultLoading = false;
 	let vaultResult = null;
+	// The merchant account whose linked PayPal account owns the agreement. Falls back
+	// to BRAINTREE_MERCHANT_ACCOUNT_ID on the server when left blank.
+	let merchantAccountId = "";
 	// Lets an agreement id be vaulted on its own, without re-running the PayPal flow.
 	let manualAgreementId = "";
 
@@ -207,6 +210,9 @@
 				customer,
 				shippingAddress,
 			};
+			if (merchantAccountId.trim()) {
+				requestBody.merchantAccountId = merchantAccountId.trim();
+			}
 			addLog("POST /api/billing-agreements/vault [GraphQL: createCustomer + vaultPayPalBillingAgreement]", requestBody);
 
 			const response = await fetch("/api/billing-agreements/vault", {
@@ -516,6 +522,18 @@
 								/>
 								<p class="text-xs text-gray-500 mt-1">Paste an existing agreement to vault it without re-running the PayPal flow.</p>
 							{/if}
+						</div>
+
+						<div>
+							<label for="vaultMerchantAccount" class="block text-xs font-semibold text-gray-700 mb-1">Merchant Account ID</label>
+							<input
+								id="vaultMerchantAccount"
+								type="text"
+								bind:value={merchantAccountId}
+								placeholder="Gateway default"
+								class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white font-mono"
+							/>
+							<p class="text-xs text-gray-500 mt-1">Must be the merchant account whose linked PayPal account owns the agreement.</p>
 						</div>
 
 						{#if billingAgreementId && agreementEnv !== null && agreementEnv !== isProduction}
