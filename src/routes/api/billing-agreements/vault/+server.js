@@ -55,11 +55,15 @@ mutation DeleteCustomer($input: DeleteCustomerInput!) {
  * 92921 regardless of the underlying reason, so pair it with the PayPal preflight
  * result to say which side is actually at fault.
  */
-function explainVaultError(errors, preflight, isProduction) {
+function explainVaultError(errors, preflight, isProduction, merchantAccountId) {
     const has92921 = errors.some((e) => e.extensions?.legacyCode === '92921');
     if (!has92921) return null;
 
     const envName = isProduction ? 'production' : 'sandbox';
+    const envVar = `BRAINTREE${isProduction ? '_PROD' : ''}_MERCHANT_ACCOUNT_ID`;
+    const maNote = merchantAccountId
+        ? `The import targeted merchant account "${merchantAccountId}" - confirm that is the one holding the PayPal link.`
+        : `${envVar} is not set, so the import used the gateway's default merchant account. This gateway's PayPal link lives on a different merchant account: set ${envVar} to it.`;
 
     if (preflight?.found === false) {
         return `PayPal (${envName}) does not recognize this billing agreement id under the REST app in PUBLIC_PAYPAL${isProduction ? '_PROD' : ''}_CLIENT_ID. Re-create the agreement, and confirm the environment toggle matches the one it was approved in.`;
@@ -73,10 +77,10 @@ function explainVaultError(errors, preflight, isProduction) {
     }
 
     if (preflight?.found === true) {
-        return `The billing agreement is active and visible to your PayPal REST app, so the id is fine — Braintree could not read it. Braintree imports as the PayPal account linked to the gateway, so this is a linking mismatch: the PayPal business account behind PUBLIC_PAYPAL${isProduction ? '_PROD' : ''}_CLIENT_ID is not the one linked to this gateway.`;
+        return `The billing agreement is active and visible to your PayPal REST app, so the id is fine — Braintree could not read it. Braintree looks the agreement up as the PayPal account linked to the merchant account it imports against, so this is a merchant account mismatch. ${maNote}`;
     }
 
-    return `Braintree could not retrieve the agreement from PayPal. Verify the ${envName} gateway's linked PayPal account matches the REST app that created the agreement.`;
+    return `Braintree could not retrieve the agreement from PayPal on the ${envName} gateway. ${maNote}`;
 }
 
 export async function POST({ request }) {
@@ -86,6 +90,12 @@ export async function POST({ request }) {
         if (!billingAgreementId) {
             return json({ error: 'billingAgreementId is required' }, { status: 400 });
         }
+
+        // Braintree resolves the agreement as the PayPal account linked to the merchant
+        // account it imports against, so the import has to target the one holding that
+        // link. Configured per environment - callers do not supply it.
+        const merchantAccountId =
+            (isProduction ? env.BRAINTREE_PROD_MERCHANT_ACCOUNT_ID : env.BRAINTREE_MERCHANT_ACCOUNT_ID) || null;
 
         const publicKey = isProduction ? env.BRAINTREE_PROD_PUBLIC_KEY : env.BRAINTREE_PUBLIC_KEY;
         const privateKey = isProduction ? env.BRAINTREE_PROD_PRIVATE_KEY : env.BRAINTREE_PRIVATE_KEY;
@@ -126,9 +136,10 @@ export async function POST({ request }) {
                 request: {
                     billingAgreementId,
                     environment: isProduction ? 'production' : 'sandbox',
-                    // Which PayPal app owns the agreement - it has to be the account
-                    // linked to the Braintree gateway doing the import.
-                    paypalClientId: isProduction ? PUBLIC_PAYPAL_PROD_CLIENT_ID : PUBLIC_PAYPAL_CLIENT_ID
+                    // Which PayPal app owns the agreement, and which merchant account
+                    // Braintree imports as - the pair that has to line up.
+                    paypalClientId: isProduction ? PUBLIC_PAYPAL_PROD_CLIENT_ID : PUBLIC_PAYPAL_CLIENT_ID,
+                    merchantAccountId: merchantAccountId || '(gateway default)'
                 },
                 response: lookup.ok
                     ? { httpStatus: lookup.status, id: lookup.body?.id, state: lookup.body?.state, payer: lookup.body?.payer }
@@ -194,6 +205,9 @@ export async function POST({ request }) {
         if (customerId) {
             vaultInput.customerId = customerId;
         }
+        if (merchantAccountId) {
+            vaultInput.merchantAccountId = merchantAccountId;
+        }
 
         const response = await fetch(graphqlUrl, {
             method: 'POST',
@@ -236,7 +250,7 @@ export async function POST({ request }) {
 
         if (data.errors && data.errors.length > 0) {
             const errorMessage = data.errors.map(e => e.message).join('; ');
-            const hint = explainVaultError(data.errors, preflight, isProduction);
+            const hint = explainVaultError(data.errors, preflight, isProduction, merchantAccountId);
             await rollbackCustomer();
             return json({ error: errorMessage, hint, details: data.errors, mutations }, { status: 400 });
         }
