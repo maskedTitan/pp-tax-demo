@@ -17,6 +17,14 @@
 	// Vault state
 	let vaultLoading = false;
 	let vaultResult = null;
+	// Optional override. PayPal is linked to a Braintree gateway per merchant
+	// account, so the import has to target the merchant account holding that link.
+	let merchantAccountId = "";
+	// Lets an agreement id be vaulted on its own, without re-running the PayPal flow.
+	let manualAgreementId = "";
+
+	// The flow's agreement wins; otherwise vault whatever id was pasted in.
+	$: vaultTargetId = billingAgreementId || manualAgreementId.trim();
 
 	// Customer details for vaulting
 	let customer = {
@@ -194,8 +202,17 @@
 		errorHint = "";
 
 		try {
-			const vaultEnv = agreementEnv ?? isProduction;
-			const requestBody = { billingAgreementId, isProduction: vaultEnv, customer, shippingAddress };
+			// A pasted id carries no known environment, so fall back to the toggle.
+			const vaultEnv = billingAgreementId ? (agreementEnv ?? isProduction) : isProduction;
+			const requestBody = {
+				billingAgreementId: vaultTargetId,
+				isProduction: vaultEnv,
+				customer,
+				shippingAddress,
+			};
+			if (merchantAccountId.trim()) {
+				requestBody.merchantAccountId = merchantAccountId.trim();
+			}
 			addLog("POST /api/billing-agreements/vault [GraphQL: createCustomer + vaultPayPalBillingAgreement]", requestBody);
 
 			const response = await fetch("/api/billing-agreements/vault", {
@@ -471,38 +488,82 @@
 							</div>
 						{/if}
 
-						<!-- Vault in Braintree -->
-						{#if billingAgreementId && !vaultResult}
-							<div class="mt-3 pt-3 border-t border-green-200">
-								{#if agreementEnv !== null && agreementEnv !== isProduction}
-									<p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-2">
-										This agreement was approved in <strong>{agreementEnv ? "PRODUCTION" : "SANDBOX"}</strong>, so it will be vaulted
-										against the {agreementEnv ? "production" : "sandbox"} Braintree gateway regardless of the toggle above.
-									</p>
-								{/if}
-								<button
-									on:click={vaultInBraintree}
-									disabled={vaultLoading}
-									class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold rounded-lg transition-colors text-sm"
-								>
-									{#if vaultLoading}
-										<span class="flex items-center justify-center gap-2">
-											<svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-												<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-												<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-											</svg>
-											Vaulting...
-										</span>
-									{:else}
-										Vault in Braintree
-									{/if}
-								</button>
-							</div>
+					</div>
+				{/if}
+
+				<!-- Vault in Braintree -->
+				<div class="bg-white rounded-lg border border-gray-200 p-4">
+					<div class="flex items-center gap-3 mb-4">
+						<div class="text-indigo-600">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+							</svg>
+						</div>
+						<div>
+							<h3 class="text-base font-bold text-gray-900">Vault in Braintree</h3>
+							<p class="text-xs text-gray-500">Imports the agreement via vaultPayPalBillingAgreement</p>
+						</div>
+					</div>
+
+					<div class="space-y-3">
+						<div>
+							<label for="vaultAgreementId" class="block text-xs font-semibold text-gray-700 mb-1">Billing Agreement ID</label>
+							{#if billingAgreementId}
+								<div class="w-full px-3 py-2 text-sm border border-gray-200 rounded bg-gray-50">
+									<code class="font-mono text-xs">{billingAgreementId}</code>
+								</div>
+							{:else}
+								<input
+									id="vaultAgreementId"
+									type="text"
+									bind:value={manualAgreementId}
+									placeholder="B-XXXXXXXXXXXXXXXXX"
+									class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white font-mono"
+								/>
+								<p class="text-xs text-gray-500 mt-1">Paste an existing agreement to vault it without re-running the PayPal flow.</p>
+							{/if}
+						</div>
+
+						<div>
+							<label for="vaultMerchantAccount" class="block text-xs font-semibold text-gray-700 mb-1">Merchant Account ID <span class="font-normal text-gray-400">(optional)</span></label>
+							<input
+								id="vaultMerchantAccount"
+								type="text"
+								bind:value={merchantAccountId}
+								placeholder="Gateway default"
+								class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white font-mono"
+							/>
+							<p class="text-xs text-gray-500 mt-1">Must be the merchant account whose linked PayPal account owns the agreement.</p>
+						</div>
+
+						{#if billingAgreementId && agreementEnv !== null && agreementEnv !== isProduction}
+							<p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+								This agreement was approved in <strong>{agreementEnv ? "PRODUCTION" : "SANDBOX"}</strong>, so it will be vaulted against
+								the {agreementEnv ? "production" : "sandbox"} Braintree gateway regardless of the toggle above.
+							</p>
 						{/if}
+
+						<button
+							on:click={vaultInBraintree}
+							disabled={vaultLoading || !vaultTargetId}
+							class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold rounded-lg transition-colors text-sm"
+						>
+							{#if vaultLoading}
+								<span class="flex items-center justify-center gap-2">
+									<svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+									</svg>
+									Vaulting...
+								</span>
+							{:else}
+								Vault in Braintree
+							{/if}
+						</button>
 
 						<!-- Vault Result -->
 						{#if vaultResult}
-							<div class="mt-3 pt-3 border-t border-green-200">
+							<div class="pt-3 border-t border-gray-100">
 								<p class="text-xs font-bold text-indigo-800 mb-2">Braintree Vault Result</p>
 								<div class="bg-white border border-indigo-100 rounded p-2 space-y-1">
 									<p class="text-xs">
@@ -585,7 +646,7 @@
 							</div>
 						{/if}
 					</div>
-				{/if}
+				</div>
 
 				<!-- Error -->
 				{#if errorMessage}
