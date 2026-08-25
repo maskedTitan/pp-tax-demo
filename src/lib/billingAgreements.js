@@ -33,6 +33,40 @@ export async function createBillingAgreementToken(agreementData, isProduction = 
 }
 
 /**
+ * Look up a billing agreement by id (legacy v1 API).
+ *
+ * Used as a preflight before importing into Braintree: it proves whether the
+ * agreement is visible to *our* PayPal REST app in *this* environment, which
+ * separates a bad/expired agreement id from a Braintree<->PayPal linking issue.
+ *
+ * @param {string} agreementId - The B- prefixed agreement id
+ * @param {boolean} isProduction - Whether to use production environment
+ * @returns {Promise<{ ok: boolean, status: number, body: any }>}
+ */
+export async function getBillingAgreement(agreementId, isProduction = false) {
+	const accessToken = await getPayPalAccessToken(isProduction);
+
+	const response = await fetch(
+		`${getApiBase(isProduction)}/v1/billing-agreements/agreements/${encodeURIComponent(agreementId)}`,
+		{
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${accessToken}`
+			}
+		}
+	);
+
+	let body;
+	try {
+		body = await response.json();
+	} catch {
+		body = null;
+	}
+
+	return { ok: response.ok, status: response.status, body };
+}
+
+/**
  * Execute a billing agreement after user approval (legacy v1 API)
  * @param {string} tokenId - The agreement token from the approval redirect
  * @param {boolean} isProduction - Whether to use production environment

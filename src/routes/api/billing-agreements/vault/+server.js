@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import { getBillingAgreement } from '$lib/billingAgreements.js';
 
 const CREATE_CUSTOMER_MUTATION = `
 mutation CreateCustomer($input: CreateCustomerInput!) {
@@ -40,6 +41,40 @@ mutation VaultPayPalBillingAgreement($input: VaultPayPalBillingAgreementInput!) 
   }
 }`;
 
+const DELETE_CUSTOMER_MUTATION = `
+mutation DeleteCustomer($input: DeleteCustomerInput!) {
+  deleteCustomer(input: $input) {
+    clientMutationId
+  }
+}`;
+
+/**
+ * Braintree resolves a billing agreement by calling PayPal as the PayPal account
+ * linked to the gateway. When that lookup comes back empty it reports legacy code
+ * 92921 regardless of the underlying reason, so pair it with the PayPal preflight
+ * result to say which side is actually at fault.
+ */
+function explainVaultError(errors, preflight, isProduction) {
+    const has92921 = errors.some((e) => e.extensions?.legacyCode === '92921');
+    if (!has92921) return null;
+
+    const envName = isProduction ? 'production' : 'sandbox';
+
+    if (preflight?.found === false) {
+        return `PayPal (${envName}) does not recognize this billing agreement id under the REST app in PUBLIC_PAYPAL${isProduction ? '_PROD' : ''}_CLIENT_ID. Re-create the agreement, and confirm the environment toggle matches the one it was approved in.`;
+    }
+
+    if (preflight?.found === true && preflight.state && preflight.state !== 'Active') {
+        return `The billing agreement exists but its state is "${preflight.state}", not "Active". Braintree can only import active agreements.`;
+    }
+
+    if (preflight?.found === true) {
+        return `The billing agreement is active and visible to your PayPal REST app, so the id is fine — Braintree could not read it. That means the PayPal account linked to this ${envName} Braintree gateway is not the account that owns the agreement (mismatched PayPal app/gateway pairing), or billing agreement import is not enabled on the gateway.`;
+    }
+
+    return `Braintree could not retrieve the agreement from PayPal. Verify the ${envName} Braintree gateway is linked to the same PayPal account as the REST app that created the agreement.`;
+}
+
 export async function POST({ request }) {
     try {
         const { billingAgreementId, isProduction, customer, shippingAddress } = await request.json();
@@ -69,6 +104,34 @@ export async function POST({ request }) {
         const mutations = [];
         let customerId = null;
         let createdCustomer = null;
+
+        // Step 0: Ask PayPal directly whether this agreement exists and is active.
+        // Braintree's import failure message is identical for "bad id", "wrong
+        // environment" and "gateway linked to a different PayPal account", so this
+        // lookup is what tells them apart.
+        let preflight = null;
+        try {
+            const lookup = await getBillingAgreement(billingAgreementId, isProduction);
+            preflight = {
+                found: lookup.ok,
+                state: lookup.body?.state || null,
+                payerEmail: lookup.body?.payer?.payer_info?.email || null
+            };
+            mutations.push({
+                mutation: 'GET /v1/billing-agreements/agreements (PayPal preflight)',
+                request: { billingAgreementId, environment: isProduction ? 'production' : 'sandbox' },
+                response: lookup.ok
+                    ? { httpStatus: lookup.status, id: lookup.body?.id, state: lookup.body?.state, payer: lookup.body?.payer }
+                    : { httpStatus: lookup.status, ...lookup.body }
+            });
+        } catch (preflightError) {
+            // A failed preflight must not block the import - it is diagnostic only.
+            mutations.push({
+                mutation: 'GET /v1/billing-agreements/agreements (PayPal preflight)',
+                request: { billingAgreementId, environment: isProduction ? 'production' : 'sandbox' },
+                response: { error: preflightError.message }
+            });
+        }
 
         // Step 1: Create customer via GraphQL with address in custom fields
         if (customer && (customer.firstName || customer.lastName || customer.email)) {
@@ -134,14 +197,44 @@ export async function POST({ request }) {
         const data = await response.json();
         mutations.push({ mutation: 'vaultPayPalBillingAgreement', request: vaultInput, response: data });
 
+        // The customer only exists to hang the payment method off. If the import
+        // fails, drop it again so retries don't litter the vault with empty customers.
+        const rollbackCustomer = async () => {
+            if (!customerId) return;
+            try {
+                const deleteResponse = await fetch(graphqlUrl, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        query: DELETE_CUSTOMER_MUTATION,
+                        variables: { input: { customerId } }
+                    })
+                });
+                mutations.push({
+                    mutation: 'deleteCustomer (rollback)',
+                    request: { customerId },
+                    response: await deleteResponse.json()
+                });
+            } catch (rollbackError) {
+                mutations.push({
+                    mutation: 'deleteCustomer (rollback)',
+                    request: { customerId },
+                    response: { error: rollbackError.message }
+                });
+            }
+        };
+
         if (data.errors && data.errors.length > 0) {
             const errorMessage = data.errors.map(e => e.message).join('; ');
-            return json({ error: errorMessage, details: data.errors, mutations }, { status: 400 });
+            const hint = explainVaultError(data.errors, preflight, isProduction);
+            await rollbackCustomer();
+            return json({ error: errorMessage, hint, details: data.errors, mutations }, { status: 400 });
         }
 
         const paymentMethod = data.data?.vaultPayPalBillingAgreement?.paymentMethod;
 
         if (!paymentMethod) {
+            await rollbackCustomer();
             return json({ error: 'No payment method returned from Braintree', mutations }, { status: 400 });
         }
 

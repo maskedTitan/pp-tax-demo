@@ -5,9 +5,14 @@
 	let isProduction = false;
 	let loading = false;
 	let errorMessage = "";
+	let errorHint = "";
 	let successMessage = "";
 	let billingAgreementId = "";
 	let agreementDetails = null;
+	// Environment the agreement was actually approved in. Vaulting must target the
+	// same one - a Braintree gateway can only import agreements from the PayPal
+	// account it is linked to, so a flipped toggle looks like an invalid agreement.
+	let agreementEnv = null;
 
 	// Vault state
 	let vaultLoading = false;
@@ -141,6 +146,7 @@
 
 			billingAgreementId = data.id;
 			agreementDetails = data;
+			agreementEnv = isProduction;
 			successMessage = `Billing Agreement created: ${billingAgreementId}`;
 
 			// Auto-populate customer form from PayPal payer info
@@ -184,9 +190,12 @@
 	async function vaultInBraintree() {
 		vaultLoading = true;
 		vaultResult = null;
+		errorMessage = "";
+		errorHint = "";
 
 		try {
-			const requestBody = { billingAgreementId, isProduction, customer, shippingAddress };
+			const vaultEnv = agreementEnv ?? isProduction;
+			const requestBody = { billingAgreementId, isProduction: vaultEnv, customer, shippingAddress };
 			addLog("POST /api/billing-agreements/vault [GraphQL: createCustomer + vaultPayPalBillingAgreement]", requestBody);
 
 			const response = await fetch("/api/billing-agreements/vault", {
@@ -208,6 +217,8 @@
 			}
 
 			if (!response.ok) {
+				errorHint = data.hint || "";
+				if (errorHint) addLog("Diagnosis (vault)", errorHint);
 				throw new Error(data.error || "Failed to vault billing agreement");
 			}
 
@@ -463,6 +474,12 @@
 						<!-- Vault in Braintree -->
 						{#if billingAgreementId && !vaultResult}
 							<div class="mt-3 pt-3 border-t border-green-200">
+								{#if agreementEnv !== null && agreementEnv !== isProduction}
+									<p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-2">
+										This agreement was approved in <strong>{agreementEnv ? "PRODUCTION" : "SANDBOX"}</strong>, so it will be vaulted
+										against the {agreementEnv ? "production" : "sandbox"} Braintree gateway regardless of the toggle above.
+									</p>
+								{/if}
 								<button
 									on:click={vaultInBraintree}
 									disabled={vaultLoading}
@@ -581,6 +598,12 @@
 							</div>
 							<p class="text-sm font-semibold text-red-800">{errorMessage}</p>
 						</div>
+						{#if errorHint}
+							<div class="mt-3 pt-3 border-t border-red-200">
+								<p class="text-xs font-bold text-red-800 mb-1">Likely cause</p>
+								<p class="text-xs text-red-700 leading-relaxed">{errorHint}</p>
+							</div>
+						{/if}
 					</div>
 				{/if}
 
