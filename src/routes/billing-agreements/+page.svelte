@@ -19,7 +19,7 @@
 	let vaultResult = null;
 	// The merchant account whose linked PayPal account owns the agreement. Falls back
 	// to BRAINTREE_MERCHANT_ACCOUNT_ID on the server when left blank.
-	let merchantAccountId = "";
+	let merchantAccountId = "paypal";
 	// Lets an agreement id be vaulted on its own, without re-running the PayPal flow.
 	let manualAgreementId = "";
 
