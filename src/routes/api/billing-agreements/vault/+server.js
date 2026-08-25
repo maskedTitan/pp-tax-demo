@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { getBillingAgreement } from '$lib/billingAgreements.js';
+import { PUBLIC_PAYPAL_CLIENT_ID, PUBLIC_PAYPAL_PROD_CLIENT_ID } from '$env/static/public';
 
 const CREATE_CUSTOMER_MUTATION = `
 mutation CreateCustomer($input: CreateCustomerInput!) {
@@ -67,12 +68,15 @@ function explainVaultError(errors, preflight, isProduction, merchantAccountId) {
         return `PayPal (${envName}) does not recognize this billing agreement id under the REST app in PUBLIC_PAYPAL${isProduction ? '_PROD' : ''}_CLIENT_ID. Re-create the agreement, and confirm the environment toggle matches the one it was approved in.`;
     }
 
-    if (preflight?.found === true && preflight.state && preflight.state !== 'Active') {
-        return `The billing agreement exists but its state is "${preflight.state}", not "Active". Braintree can only import active agreements.`;
+    // PayPal has returned this both as "Active" and "ACTIVE" - compare case-insensitively.
+    const state = (preflight?.state || '').toUpperCase();
+
+    if (preflight?.found === true && state && state !== 'ACTIVE') {
+        return `The billing agreement exists but its state is "${preflight.state}", not active. Braintree can only import active agreements.`;
     }
 
     if (preflight?.found === true) {
-        return `The billing agreement is active and visible to your PayPal REST app, so the id is fine — Braintree could not read it. Braintree imports as the PayPal account linked to the merchant account it charges against, so this is a linking mismatch. ${maNote}`;
+        return `The billing agreement is active and visible to your PayPal REST app, so the id is fine — Braintree could not read it. Braintree imports as the PayPal account linked to the merchant account it charges against, so this is a linking mismatch: the PayPal business account behind PUBLIC_PAYPAL${isProduction ? '_PROD' : ''}_CLIENT_ID is not the one linked to this gateway. Compare that client id against the codebase where the import works. ${maNote}`;
     }
 
     return `Braintree could not retrieve the agreement from PayPal. Verify the ${envName} gateway's linked PayPal account matches the REST app that created the agreement. ${maNote}`;
@@ -132,7 +136,14 @@ export async function POST({ request }) {
             };
             mutations.push({
                 mutation: 'GET /v1/billing-agreements/agreements (PayPal preflight)',
-                request: { billingAgreementId, environment: isProduction ? 'production' : 'sandbox' },
+                request: {
+                    billingAgreementId,
+                    environment: isProduction ? 'production' : 'sandbox',
+                    // Which PayPal app owns the agreement and which merchant account
+                    // Braintree imports as - the pair that has to line up.
+                    paypalClientId: isProduction ? PUBLIC_PAYPAL_PROD_CLIENT_ID : PUBLIC_PAYPAL_CLIENT_ID,
+                    merchantAccountId: merchantAccountId || '(gateway default)'
+                },
                 response: lookup.ok
                     ? { httpStatus: lookup.status, id: lookup.body?.id, state: lookup.body?.state, payer: lookup.body?.payer }
                     : { httpStatus: lookup.status, ...lookup.body }
