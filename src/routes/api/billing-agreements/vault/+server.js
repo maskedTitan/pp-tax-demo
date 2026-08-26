@@ -60,10 +60,6 @@ function explainVaultError(errors, preflight, isProduction, merchantAccountId) {
     if (!has92921) return null;
 
     const envName = isProduction ? 'production' : 'sandbox';
-    const envVar = `BRAINTREE${isProduction ? '_PROD' : ''}_MERCHANT_ACCOUNT_ID`;
-    const maNote = merchantAccountId
-        ? `The import targeted merchant account "${merchantAccountId}" - confirm that is the one holding the PayPal link.`
-        : `No merchant account was supplied and ${envVar} is not set, so the import used the gateway's default merchant account. This gateway's PayPal link lives on a different merchant account: enter it in the Merchant Account ID field, or set ${envVar} to it.`;
 
     if (preflight?.found === false) {
         return `PayPal (${envName}) does not recognize this billing agreement id under the REST app in PUBLIC_PAYPAL${isProduction ? '_PROD' : ''}_CLIENT_ID. Re-create the agreement, and confirm the environment toggle matches the one it was approved in.`;
@@ -77,10 +73,13 @@ function explainVaultError(errors, preflight, isProduction, merchantAccountId) {
     }
 
     if (preflight?.found === true) {
+        const maNote = merchantAccountId
+            ? `The import targeted merchant account "${merchantAccountId}" — confirm that is the one holding the PayPal link.`
+            : `No merchant account was specified, so the import used the gateway default. Try entering the merchant account ID that has the correct PayPal link.`;
         return `The billing agreement is active and visible to your PayPal REST app, so the id is fine — Braintree could not read it. Braintree looks the agreement up as the PayPal account linked to the merchant account it imports against, so this is a merchant account mismatch. ${maNote}`;
     }
 
-    return `Braintree could not retrieve the agreement from PayPal on the ${envName} gateway. ${maNote}`;
+    return `Braintree could not retrieve the agreement from PayPal on the ${envName} gateway.`;
 }
 
 export async function POST({ request }) {
@@ -92,13 +91,7 @@ export async function POST({ request }) {
             return json({ error: 'billingAgreementId is required' }, { status: 400 });
         }
 
-        // Braintree resolves the agreement as the PayPal account linked to the merchant
-        // account it imports against, so the import has to target the one holding that
-        // link. Supplied per request, falling back to the configured default.
-        const merchantAccountId =
-            body.merchantAccountId ||
-            (isProduction ? env.BRAINTREE_PROD_MERCHANT_ACCOUNT_ID : env.BRAINTREE_MERCHANT_ACCOUNT_ID) ||
-            null;
+        const merchantAccountId = body.merchantAccountId || null;
 
         const publicKey = isProduction ? env.BRAINTREE_PROD_PUBLIC_KEY : env.BRAINTREE_PUBLIC_KEY;
         const privateKey = isProduction ? env.BRAINTREE_PROD_PRIVATE_KEY : env.BRAINTREE_PRIVATE_KEY;
@@ -141,8 +134,7 @@ export async function POST({ request }) {
                     environment: isProduction ? 'production' : 'sandbox',
                     // Which PayPal app owns the agreement, and which merchant account
                     // Braintree imports as - the pair that has to line up.
-                    paypalClientId: isProduction ? PUBLIC_PAYPAL_PROD_CLIENT_ID : PUBLIC_PAYPAL_CLIENT_ID,
-                    merchantAccountId: merchantAccountId || '(gateway default)'
+                    paypalClientId: isProduction ? PUBLIC_PAYPAL_PROD_CLIENT_ID : PUBLIC_PAYPAL_CLIENT_ID
                 },
                 response: lookup.ok
                     ? { httpStatus: lookup.status, id: lookup.body?.id, state: lookup.body?.state, payer: lookup.body?.payer }

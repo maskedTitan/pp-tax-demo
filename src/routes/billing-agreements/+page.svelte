@@ -17,9 +17,8 @@
 	// Vault state
 	let vaultLoading = false;
 	let vaultResult = null;
-	// The merchant account whose linked PayPal account owns the agreement. Falls back
-	// to BRAINTREE_MERCHANT_ACCOUNT_ID on the server when left blank.
-	let merchantAccountId = "paypal";
+	// The merchant account whose linked PayPal account owns the agreement.
+	let merchantAccountId = "";
 	// Lets an agreement id be vaulted on its own, without re-running the PayPal flow.
 	let manualAgreementId = "";
 
@@ -533,7 +532,7 @@
 								placeholder="Gateway default"
 								class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white font-mono"
 							/>
-							<p class="text-xs text-gray-500 mt-1">Must be the merchant account whose linked PayPal account owns the agreement.</p>
+							<p class="text-xs text-gray-500 mt-1">The merchant account whose PayPal link owns the agreement. Required if the gateway default doesn't have the right PayPal link.</p>
 						</div>
 
 						{#if billingAgreementId && agreementEnv !== null && agreementEnv !== isProduction}
