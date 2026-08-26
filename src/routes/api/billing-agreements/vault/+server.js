@@ -9,15 +9,6 @@ mutation CreateCustomer($input: CreateCustomerInput!) {
     customer {
       id
       legacyId
-      firstName
-      lastName
-      email
-      company
-      phoneNumber
-      customFields {
-        name
-        value
-      }
     }
   }
 }`;
@@ -39,13 +30,6 @@ mutation VaultPayPalBillingAgreement($input: VaultPayPalBillingAgreementInput!) 
         }
       }
     }
-  }
-}`;
-
-const DELETE_CUSTOMER_MUTATION = `
-mutation DeleteCustomer($input: DeleteCustomerInput!) {
-  deleteCustomer(input: $input) {
-    clientMutationId
   }
 }`;
 
@@ -85,7 +69,7 @@ function explainVaultError(errors, preflight, isProduction, merchantAccountId) {
 export async function POST({ request }) {
     try {
         const body = await request.json();
-        const { billingAgreementId, isProduction, customer, shippingAddress } = body;
+        const { billingAgreementId, isProduction } = body;
 
         if (!billingAgreementId) {
             return json({ error: 'billingAgreementId is required' }, { status: 400 });
@@ -112,8 +96,6 @@ export async function POST({ request }) {
         };
 
         const mutations = [];
-        let customerId = null;
-        let createdCustomer = null;
 
         // Step 0: Ask PayPal directly whether this agreement exists and is active.
         // Braintree's import failure message is identical for "bad id", "wrong
@@ -149,51 +131,25 @@ export async function POST({ request }) {
             });
         }
 
-        // Step 1: Create customer via GraphQL with address in custom fields
-        if (customer && (customer.firstName || customer.lastName || customer.email)) {
-            const customerInput = {};
-            if (customer.firstName) customerInput.firstName = customer.firstName;
-            if (customer.lastName) customerInput.lastName = customer.lastName;
-            if (customer.email) customerInput.email = customer.email;
-            if (customer.company) customerInput.company = customer.company;
-            if (customer.phoneNumber) customerInput.phoneNumber = customer.phoneNumber || 9999999999;
-            if (customer.website) customerInput.website = customer.website;
-            if (customer.fax) customerInput.fax = customer.fax;
+        // Step 1: Create an empty customer to attach the payment method to
+        const customerResponse = await fetch(graphqlUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                query: CREATE_CUSTOMER_MUTATION,
+                variables: { input: { customer: {} } }
+            })
+        });
 
-            // Store address info as custom fields
-            if (shippingAddress) {
-                const customFields = [];
-                if (shippingAddress.line1) customFields.push({ name: 'street_address', value: shippingAddress.line1 });
-                if (shippingAddress.line2) customFields.push({ name: 'extended_address', value: shippingAddress.line2 });
-                if (shippingAddress.city) customFields.push({ name: 'locality', value: shippingAddress.city });
-                if (shippingAddress.state) customFields.push({ name: 'region', value: shippingAddress.state });
-                if (shippingAddress.postal_code) customFields.push({ name: 'postal_code', value: shippingAddress.postal_code });
-                if (shippingAddress.country_code) customFields.push({ name: 'country_code', value: shippingAddress.country_code });
-                if (customFields.length > 0) {
-                    customerInput.customFields = customFields;
-                }
-            }
+        const customerData = await customerResponse.json();
+        mutations.push({ mutation: 'createCustomer', request: {}, response: customerData });
 
-            const customerResponse = await fetch(graphqlUrl, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    query: CREATE_CUSTOMER_MUTATION,
-                    variables: { input: { customer: customerInput } }
-                })
-            });
-
-            const customerData = await customerResponse.json();
-            mutations.push({ mutation: 'createCustomer', request: { customer: customerInput }, response: customerData });
-
-            if (customerData.errors && customerData.errors.length > 0) {
-                const errorMessage = customerData.errors.map(e => e.message).join('; ');
-                return json({ error: errorMessage, details: customerData.errors, mutations }, { status: 400 });
-            }
-
-            createdCustomer = customerData.data?.createCustomer?.customer;
-            customerId = createdCustomer?.id;
+        if (customerData.errors && customerData.errors.length > 0) {
+            const errorMessage = customerData.errors.map(e => e.message).join('; ');
+            return json({ error: errorMessage, details: customerData.errors, mutations }, { status: 400 });
         }
+
+        const customerId = customerData.data?.createCustomer?.customer?.id;
 
         // Step 2: Vault the billing agreement via GraphQL
         const vaultInput = { billingAgreementId };
@@ -216,51 +172,21 @@ export async function POST({ request }) {
         const data = await response.json();
         mutations.push({ mutation: 'vaultPayPalBillingAgreement', request: vaultInput, response: data });
 
-        // The customer only exists to hang the payment method off. If the import
-        // fails, drop it again so retries don't litter the vault with empty customers.
-        const rollbackCustomer = async () => {
-            if (!customerId) return;
-            try {
-                const deleteResponse = await fetch(graphqlUrl, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({
-                        query: DELETE_CUSTOMER_MUTATION,
-                        variables: { input: { customerId } }
-                    })
-                });
-                mutations.push({
-                    mutation: 'deleteCustomer (rollback)',
-                    request: { customerId },
-                    response: await deleteResponse.json()
-                });
-            } catch (rollbackError) {
-                mutations.push({
-                    mutation: 'deleteCustomer (rollback)',
-                    request: { customerId },
-                    response: { error: rollbackError.message }
-                });
-            }
-        };
-
         if (data.errors && data.errors.length > 0) {
             const errorMessage = data.errors.map(e => e.message).join('; ');
             const hint = explainVaultError(data.errors, preflight, isProduction, merchantAccountId);
-            await rollbackCustomer();
             return json({ error: errorMessage, hint, details: data.errors, mutations }, { status: 400 });
         }
 
         const paymentMethod = data.data?.vaultPayPalBillingAgreement?.paymentMethod;
 
         if (!paymentMethod) {
-            await rollbackCustomer();
             return json({ error: 'No payment method returned from Braintree', mutations }, { status: 400 });
         }
 
         return json({
             success: true,
             mutations,
-            customer: createdCustomer || null,
             paymentMethod: {
                 id: paymentMethod.id,
                 legacyId: paymentMethod.legacyId,
