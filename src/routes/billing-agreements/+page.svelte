@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from "svelte";
 	import { page } from "$app/stores";
+	import DeveloperLogs from "$lib/components/DeveloperLogs.svelte";
 
 	let isProduction = false;
 	let paypalAccount = "default";
@@ -28,7 +29,6 @@
 
 	// Developer logs
 	let logs = [];
-	let showLogs = false;
 
 	function addLog(label, data, type = 'info') {
 		logs = [
@@ -629,73 +629,7 @@
 					</div>
 				{/if}
 
-				<!-- Developer Logs -->
-				<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-					<button
-						on:click={() => (showLogs = !showLogs)}
-						class="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
-					>
-						<div class="flex items-center gap-3">
-							<div class="text-gray-600">
-								<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-								</svg>
-							</div>
-							<div>
-								<h3 class="text-base font-bold text-gray-900">Developer Logs</h3>
-								<p class="text-xs text-gray-500">{logs.length} entries</p>
-							</div>
-						</div>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="h-5 w-5 text-gray-400 transition-transform {showLogs ? 'rotate-180' : ''}"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-						</svg>
-					</button>
-					{#if showLogs}
-						<div class="px-4 pb-4 border-t border-gray-100 space-y-1.5">
-							{#if logs.length === 0}
-								<p class="text-xs text-gray-500 py-2">No logs yet. Create an agreement to see API interactions.</p>
-							{:else}
-								{#each logs as log}
-									<div class="rounded p-2.5 border {
-										log.type === 'request' ? 'bg-blue-50 border-blue-200' :
-										log.type === 'response' ? 'bg-emerald-50 border-emerald-200' :
-										log.type === 'error' ? 'bg-red-50 border-red-200' :
-										'bg-gray-50 border-gray-200'
-									}">
-										<div class="flex items-center justify-between mb-1.5">
-											<div class="flex items-center gap-2">
-												<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide {
-													log.type === 'request' ? 'bg-blue-200 text-blue-800' :
-													log.type === 'response' ? 'bg-emerald-200 text-emerald-800' :
-													log.type === 'error' ? 'bg-red-200 text-red-800' :
-													'bg-gray-200 text-gray-700'
-												}">
-													{log.type === 'request' ? 'REQ' : log.type === 'response' ? 'RES' : log.type === 'error' ? 'ERR' : 'INFO'}
-												</span>
-												<span class="text-xs font-semibold {
-													log.type === 'error' ? 'text-red-800' : 'text-gray-800'
-												}">{log.label}</span>
-											</div>
-											<span class="text-[10px] text-gray-400 font-mono">{log.timestamp.split("T")[1].split(".")[0]}</span>
-										</div>
-										<pre class="text-xs overflow-x-auto whitespace-pre-wrap break-all leading-relaxed {
-											log.type === 'request' ? 'text-blue-900' :
-											log.type === 'response' ? 'text-emerald-900' :
-											log.type === 'error' ? 'text-red-700' :
-											'text-gray-600'
-										}">{log.data}</pre>
-									</div>
-								{/each}
-							{/if}
-						</div>
-					{/if}
-				</div>
+				<DeveloperLogs bind:logs />
 			</div>
 		</div>
 	</div>

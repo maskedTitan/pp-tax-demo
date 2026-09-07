@@ -35,10 +35,15 @@
 
     // Developer logs
     let logs = [];
-    function log(step, data = null) {
-        const timestamp = new Date().toLocaleTimeString();
-        logs = [...logs, { step, data, timestamp }];
-        console.log(`[SPM] ${step}`, data || '');
+    function log(label, data = null, type = 'info') {
+        const timestamp = new Date().toISOString();
+        logs = [...logs, {
+            timestamp,
+            label,
+            data: data != null ? (typeof data === 'string' ? data : JSON.stringify(data, null, 2)) : null,
+            type,
+        }];
+        console.log(`[SPM] ${label}`, data || '');
     }
 
     onMount(async () => {
@@ -108,7 +113,7 @@
                     log('onApprove — tokenizing payment', data);
                     return paypalCheckoutInstance.tokenizePayment(data, async (err, payload) => {
                         if (err) {
-                            log('Tokenization error', err);
+                            log('Tokenization error', err, 'error');
                             errorMessage = err.message || 'Failed to tokenize payment';
                             return;
                         }
@@ -124,7 +129,7 @@
 
             log('Buttons rendered — waiting for consumer to vault a PayPal account');
         } catch (err) {
-            log('initNewUser error', { message: err.message });
+            log('initNewUser error', { message: err.message }, 'error');
             errorMessage = err.message || 'Initialization failed';
         }
     }
@@ -142,7 +147,7 @@
                 })
             });
             const result = await res.json();
-            log('Vault checkout result', result);
+            log('Vault checkout result', result, 'response');
 
             if (!result.success) {
                 errorMessage = `Vault failed: ${result.error}`;
@@ -169,7 +174,7 @@
             };
             log('Vault complete — PMT stored. Reload page to demo returning user flow.');
         } catch (err) {
-            log('vaultAndStore error', { message: err.message });
+            log('vaultAndStore error', { message: err.message }, 'error');
             errorMessage = err.message || 'Failed to vault payment';
         }
     }
@@ -255,7 +260,7 @@
                     log('onApprove — consumer changed instrument, tokenizing', data);
                     return paypalCheckoutInstance.tokenizePayment(data, (err, payload) => {
                         if (err) {
-                            log('Tokenization error', err);
+                            log('Tokenization error', err, 'error');
                             errorMessage = err.message;
                             return;
                         }
@@ -299,7 +304,7 @@
             spm.render(savedPmContainerRef);
             log('SavedPaymentMethods rendered — waiting for onReady');
         } catch (err) {
-            log('initReturningUser error', { message: err.message });
+            log('initReturningUser error', { message: err.message }, 'error');
             errorMessage = err.message || 'Initialization failed';
         }
     }
@@ -322,7 +327,7 @@
                 body: JSON.stringify(body)
             });
             const result = await res.json();
-            log('Checkout result', result);
+            log('Checkout result', result, 'response');
 
             if (result.success) {
                 paymentSuccess = true;
@@ -335,7 +340,7 @@
                 errorMessage = `Payment failed: ${result.error}`;
             }
         } catch (err) {
-            log('Submit error', { message: err.message });
+            log('Submit error', { message: err.message }, 'error');
             errorMessage = err.message || 'Failed to submit payment';
         }
     }
@@ -499,6 +504,6 @@
             </div>
         </div>
 
-        <DeveloperLogs bind:developerLogs={logs} />
+        <DeveloperLogs bind:logs />
     </div>
 </div>

@@ -12,11 +12,16 @@
     let paypalLoading = true;
 
     // Developer Logs
-    let developerLogs = [];
-    function addLog(step, data = null) {
-        const timestamp = new Date().toLocaleTimeString();
-        developerLogs = [...developerLogs, { step, data, timestamp }];
-        console.log(`[Developer Log] ${step}`, data || '');
+    let logs = [];
+    function addLog(label, data = null, type = 'info') {
+        const timestamp = new Date().toISOString();
+        logs = [...logs, {
+            timestamp,
+            label,
+            data: data != null ? (typeof data === 'string' ? data : JSON.stringify(data, null, 2)) : null,
+            type,
+        }];
+        console.log(`[Developer Log] ${label}`, data || '');
     }
 
     // Feature Flags - merging Adyen and PayPal features
@@ -48,9 +53,7 @@
     let showCheckoutOptions = true;
     let showServiceAddress = false;
     let showImplementationNote = false;
-    let showJson = false;
-
-    let paypalOrderId = null; 
+    let paypalOrderId = null;
     let isInitialMount = true;
     
     let serviceAddress = {
@@ -201,14 +204,14 @@
                     fundingSource: window.paypal.FUNDING.PAYPAL,
                     style: { height: 48, shape: 'rect', color: 'black' },
                     onApprove: async function (data, actions) {
-                        addLog("PayPal onApprove triggered", data);
+                        addLog("PayPal onApprove triggered", data, 'response');
                         try {
                             const payload = await paypalInstance.tokenizePayment(data);
-                            addLog("Payment tokenized successfully", payload);
+                            addLog("Payment tokenized successfully", payload, 'response');
                             paypalOrderId = payload.nonce;
                             await submitNonceToServer(payload);
                         } catch (err) {
-                            addLog("Error tokenizing payment", err);
+                            addLog("Error tokenizing payment", err, 'error');
                             errorMessage = err.message || "Failed to tokenize payment";
                         }
                     },
@@ -217,7 +220,7 @@
                         clearSessionTimer();
                     },
                     onError: function (err) {
-                        addLog("PayPal Error", err);
+                        addLog("PayPal Error", err, 'error');
                         console.error('PayPal Error:', err);
                         errorMessage = err.message || "An error occurred with PayPal.";
                     }
@@ -230,7 +233,7 @@
                         addLog("createBillingAgreement called — vault flow");
                         if (enableSessionTimeout && !sessionStartTime) startSessionTimer();
                         const config = buildPaymentConfig();
-                        addLog("Calling paypalInstance.createPayment", config);
+                        addLog("Calling paypalInstance.createPayment", config, 'request');
                         return paypalInstance.createPayment(config);
                     };
                 } else {
@@ -238,7 +241,7 @@
                         addLog("createOrder called — checkout flow");
                         if (enableSessionTimeout && !sessionStartTime) startSessionTimer();
                         const config = buildPaymentConfig();
-                        addLog("Calling paypalInstance.createPayment", config);
+                        addLog("Calling paypalInstance.createPayment", config, 'request');
                         return paypalInstance.createPayment(config);
                     };
                     buttonConfig.onShippingChange = function (data, actions) {
@@ -274,7 +277,7 @@
             }
         } catch (err) {
             paypalLoading = false;
-            addLog("Braintree Initialization Error", { message: err.message });
+            addLog("Braintree Initialization Error", { message: err.message }, 'error');
             console.error('Braintree Initialization Error:', err);
             errorMessage = err.message || "Failed to initialize Braintree. Check configuration.";
         }
@@ -301,16 +304,16 @@
                 isVault: zeroDollarAuth || isRecurring,
                 amount: amountStr 
             };
-            addLog("POST /api/braintree/checkout", requestBody);
-            
+            addLog("POST /api/braintree/checkout", requestBody, 'request');
+
             const res = await fetch('/api/braintree/checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody)
             });
             const result = await res.json();
-            
-            addLog("Server responded with transaction result", result);
+
+            addLog("Server responded with transaction result", result, 'response');
 
             if (result.success) {
                 paymentSuccess = true;
@@ -332,7 +335,7 @@
                 errorMessage = `Payment failed: ${result.error}`;
             }
         } catch (error) {
-             addLog("Failed to submit transaction to server", { error: error.message });
+             addLog("Failed to submit transaction to server", { error: error.message }, 'error');
              errorMessage = "Failed to submit transaction to server.";
         }
     }
@@ -350,16 +353,16 @@
                 paymentMethodToken: paymentResult.vaultToken,
                 amount: currentTotal.toString()
             };
-            addLog("POST /api/braintree/checkout", requestBody);
-            
+            addLog("POST /api/braintree/checkout", requestBody, 'request');
+
             const res = await fetch('/api/braintree/checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody)
             });
             const result = await res.json();
-            
-            addLog("Charge vaulted token result", result);
+
+            addLog("Charge vaulted token result", result, 'response');
 
             if (result.success) {
                 paymentResult = {
@@ -370,7 +373,7 @@
                 vaultChargeError = `Charge failed: ${result.error}`;
             }
         } catch (error) {
-             addLog("Failed to charge vaulted token", { error: error.message });
+             addLog("Failed to charge vaulted token", { error: error.message }, 'error');
              vaultChargeError = "Failed to charge vaulted token.";
         } finally {
             chargingVault = false;
@@ -552,7 +555,7 @@
             </div>
         </div>
 
-        <DeveloperLogs bind:developerLogs bind:showJson />
+        <DeveloperLogs bind:logs />
 
         <div class="mt-6 bg-white border border-gray-200 rounded-lg overflow-hidden">
             <button onclick={() => (showImplementationNote = !showImplementationNote)} class="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors">

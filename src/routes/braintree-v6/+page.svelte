@@ -1,6 +1,7 @@
 <script>
     import { onMount, onDestroy } from "svelte";
     import { calculateTax, calculateTotal, getTaxRate } from "$lib/taxRates.js";
+    import DeveloperLogs from "$lib/components/DeveloperLogs.svelte";
 
     let errorMessage = "";
     let paymentSuccess = false;
@@ -9,11 +10,16 @@
     let sessionRef = null;
 
     // Developer Logs
-    let developerLogs = [];
-    function addLog(step, data = null) {
-        const timestamp = new Date().toLocaleTimeString();
-        developerLogs = [...developerLogs, { step, data, timestamp }];
-        console.log(`[BT v6] ${step}`, data || '');
+    let logs = [];
+    function addLog(label, data = null, type = 'info') {
+        const timestamp = new Date().toISOString();
+        logs = [...logs, {
+            timestamp,
+            label,
+            data: data != null ? (typeof data === 'string' ? data : JSON.stringify(data, null, 2)) : null,
+            type,
+        }];
+        console.log(`[BT v6] ${label}`, data || '');
     }
 
     // Feature flags
@@ -133,7 +139,7 @@
             buildSession();
         } catch (err) {
             paypalLoading = false;
-            addLog("Init error", { message: err.message });
+            addLog("Init error", { message: err.message }, 'error');
             errorMessage = err.message || "Failed to initialize Braintree v6.";
         }
     }
@@ -145,19 +151,23 @@
         sessionAmount = currentTotal.toString();
 
         const onApprove = async (data) => {
-            addLog("onApprove triggered", data);
+            addLog("onApprove triggered", data, 'response');
             try {
-                let tokenizeArg;
-                if (zeroDollarAuth || isRecurring) {
-                    tokenizeArg = { billingToken: data.billingToken };
-                } else {
-                    tokenizeArg = { payerID: data.payerId, orderID: data.orderId };
-                }
+                // The v6 SDK provides orderId/payerId (camelCase) but tokenizePayment
+                // expects payerID/orderID (uppercase ID). Pass data directly and also
+                // add the uppercase variants so tokenizePayment finds what it needs.
+                const tokenizeArg = {
+                    ...data,
+                    payerID: data.payerID || data.payerId,
+                    orderID: data.orderID || data.orderId,
+                    billingToken: data.billingToken,
+                };
+                addLog("Tokenizing with", tokenizeArg, 'request');
                 const payload = await paypalV6Instance.tokenizePayment(tokenizeArg);
-                addLog("Tokenized", payload);
+                addLog("Tokenized", payload, 'response');
                 await submitNonceToServer(payload);
             } catch (err) {
-                addLog("Tokenize error", { message: err.message });
+                addLog("Tokenize error", { message: err.message }, 'error');
                 errorMessage = err.message || "Failed to tokenize payment.";
             }
         };
@@ -227,7 +237,7 @@
             paypalLoading = false;
         } catch (err) {
             paypalLoading = false;
-            addLog("Session build error", { message: err.message });
+            addLog("Session build error", { message: err.message }, 'error');
             errorMessage = err.message || "Failed to build payment session.";
         }
     }
@@ -248,23 +258,23 @@
                 isVault: zeroDollarAuth || isRecurring,
                 amount: amountStr,
             };
-            addLog("POST /api/braintree/checkout", body);
+            addLog("POST /api/braintree/checkout", body, 'request');
             const res = await fetch('/api/braintree/checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
             const result = await res.json();
-            addLog("Server response", result);
+            addLog("Server response", result, 'response');
             if (result.success) {
                 paymentSuccess = true;
-                paymentResult = { transactionId: result.transactionId, vaultToken: result.vaultToken, nonce: payload.nonce };
+                paymentResult = { transactionId: result.transactionId, vaultToken: result.vaultToken, nonce: payload.nonce, payerId: result.payerId };
                 clearSessionTimer();
             } else {
                 errorMessage = `Payment failed: ${result.error}`;
             }
         } catch (err) {
-            addLog("Server submit error", { message: err.message });
+            addLog("Server submit error", { message: err.message }, 'error');
             errorMessage = "Failed to submit transaction.";
         }
     }
@@ -483,9 +493,13 @@
                                 <span class="font-semibold text-gray-700">Vault Token:</span>
                                 <code class="bg-gray-100 px-3 py-1 rounded font-mono text-xs">{paymentResult.vaultToken ?? '—'}</code>
                             </div>
-                            <div class="flex justify-between items-center">
+                            <div class="flex justify-between items-center pb-2 border-b border-gray-100">
                                 <span class="font-semibold text-gray-700">Nonce:</span>
                                 <code class="bg-gray-100 px-3 py-1 rounded font-mono text-xs truncate max-w-[200px]">{paymentResult.nonce}</code>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="font-semibold text-gray-700">Payer ID:</span>
+                                <code class="bg-gray-100 px-3 py-1 rounded font-mono text-xs">{paymentResult.payerId ?? '—'}</code>
                             </div>
                         </div>
                         <button class="mt-5 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded transition-all" onclick={() => location.reload()}>
@@ -496,34 +510,8 @@
             </div>
         </div>
 
-        <!-- Developer Logs -->
-        <div class="mt-6 bg-gray-900 rounded-lg overflow-hidden border border-gray-800 shadow-xl">
-            <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-                <h3 class="font-mono text-sm font-bold text-green-400 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Developer Logs — Braintree v6
-                </h3>
-                <button onclick={() => developerLogs = []} class="text-xs text-gray-400 hover:text-white transition-colors">Clear</button>
-            </div>
-            <div class="p-4 max-h-[400px] overflow-y-auto font-mono text-xs space-y-3">
-                {#if developerLogs.length === 0}
-                    <div class="text-gray-500 italic">No logs yet. Waiting for checkout events...</div>
-                {:else}
-                    {#each developerLogs as log}
-                        <div class="border-l-2 border-gray-700 pl-3">
-                            <div class="flex items-start justify-between">
-                                <span class="text-blue-300 font-semibold">{log.step}</span>
-                                <span class="text-gray-500 text-[10px]">{log.timestamp}</span>
-                            </div>
-                            {#if log.data}
-                                <pre class="mt-1 text-gray-300 bg-gray-800 p-2 rounded overflow-x-auto text-[10px]">{JSON.stringify(log.data, null, 2)}</pre>
-                            {/if}
-                        </div>
-                    {/each}
-                {/if}
-            </div>
+        <div class="mt-6">
+            <DeveloperLogs bind:logs title="Developer Logs — Braintree v6" />
         </div>
     </div>
 </div>
