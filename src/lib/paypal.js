@@ -1,5 +1,5 @@
-import { PUBLIC_PAYPAL_CLIENT_ID, PUBLIC_PAYPAL_PROD_CLIENT_ID } from '$env/static/public';
-import { PAYPAL_CLIENT_SECRET, PAYPAL_PROD_CLIENT_SECRET } from '$env/static/private';
+import { env as publicEnv } from '$env/dynamic/public';
+import { env as privateEnv } from '$env/dynamic/private';
 
 const PAYPAL_SANDBOX_API = 'https://api-m.sandbox.paypal.com';
 const PAYPAL_PRODUCTION_API = 'https://api-m.paypal.com';
@@ -13,22 +13,34 @@ function getApiBase(isProduction = false) {
 }
 
 /**
- * Get credentials based on environment
+ * Get credentials based on environment and optional named PayPal account.
  * @param {boolean} isProduction - Whether to use production environment
+ * @param {string} [paypalAccount] - Named account (e.g. "jpy"). Omit or "default" for the primary account.
  */
-function getCredentials(isProduction = false) {
+function getCredentials(isProduction = false, paypalAccount) {
+	if (paypalAccount && paypalAccount !== 'default') {
+		const tag = paypalAccount.toUpperCase(); // e.g. "jpy" -> "JPY"
+		const clientId = publicEnv[`PUBLIC_PAYPAL_${tag}_CLIENT_ID`];
+		const clientSecret = privateEnv[`PAYPAL_${tag}_CLIENT_SECRET`];
+		if (!clientId || !clientSecret) {
+			throw new Error(`PayPal credentials not configured for account "${paypalAccount}" (looked for PUBLIC_PAYPAL_${tag}_CLIENT_ID / PAYPAL_${tag}_CLIENT_SECRET)`);
+		}
+		return { clientId, clientSecret };
+	}
+
 	return {
-		clientId: isProduction ? PUBLIC_PAYPAL_PROD_CLIENT_ID : PUBLIC_PAYPAL_CLIENT_ID,
-		clientSecret: isProduction ? PAYPAL_PROD_CLIENT_SECRET : PAYPAL_CLIENT_SECRET
+		clientId: isProduction ? publicEnv.PUBLIC_PAYPAL_PROD_CLIENT_ID : publicEnv.PUBLIC_PAYPAL_CLIENT_ID,
+		clientSecret: isProduction ? privateEnv.PAYPAL_PROD_CLIENT_SECRET : privateEnv.PAYPAL_CLIENT_SECRET
 	};
 }
 
 /**
  * Get PayPal access token using client credentials
  * @param {boolean} isProduction - Whether to use production environment
+ * @param {string} [paypalAccount] - Named account (e.g. "jpy")
  */
-export async function getPayPalAccessToken(isProduction = false) {
-	const { clientId, clientSecret } = getCredentials(isProduction);
+export async function getPayPalAccessToken(isProduction = false, paypalAccount) {
+	const { clientId, clientSecret } = getCredentials(isProduction, paypalAccount);
 	const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
 	const response = await fetch(`${getApiBase(isProduction)}/v1/oauth2/token`, {

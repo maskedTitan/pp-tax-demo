@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { getBillingAgreement } from '$lib/billingAgreements.js';
-import { PUBLIC_PAYPAL_CLIENT_ID, PUBLIC_PAYPAL_PROD_CLIENT_ID } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 
 const CREATE_CUSTOMER_MUTATION = `
 mutation CreateCustomer($input: CreateCustomerInput!) {
@@ -69,7 +69,7 @@ function explainVaultError(errors, preflight, isProduction, merchantAccountId) {
 export async function POST({ request }) {
     try {
         const body = await request.json();
-        const { billingAgreementId, isProduction } = body;
+        const { billingAgreementId, isProduction, paypalAccount } = body;
 
         if (!billingAgreementId) {
             return json({ error: 'billingAgreementId is required' }, { status: 400 });
@@ -103,7 +103,7 @@ export async function POST({ request }) {
         // lookup is what tells them apart.
         let preflight = null;
         try {
-            const lookup = await getBillingAgreement(billingAgreementId, isProduction);
+            const lookup = await getBillingAgreement(billingAgreementId, isProduction, paypalAccount || undefined);
             preflight = {
                 found: lookup.ok,
                 state: lookup.body?.state || null,
@@ -116,7 +116,9 @@ export async function POST({ request }) {
                     environment: isProduction ? 'production' : 'sandbox',
                     // Which PayPal app owns the agreement, and which merchant account
                     // Braintree imports as - the pair that has to line up.
-                    paypalClientId: isProduction ? PUBLIC_PAYPAL_PROD_CLIENT_ID : PUBLIC_PAYPAL_CLIENT_ID
+                    paypalClientId: paypalAccount && paypalAccount !== 'default'
+                        ? publicEnv[`PUBLIC_PAYPAL_${paypalAccount.toUpperCase()}_CLIENT_ID`]
+                        : (isProduction ? publicEnv.PUBLIC_PAYPAL_PROD_CLIENT_ID : publicEnv.PUBLIC_PAYPAL_CLIENT_ID)
                 },
                 response: lookup.ok
                     ? { httpStatus: lookup.status, id: lookup.body?.id, state: lookup.body?.state, payer: lookup.body?.payer }

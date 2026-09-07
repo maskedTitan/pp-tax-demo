@@ -9,6 +9,7 @@ export async function POST({ request }) {
 	try {
 		const body = await request.json();
 		const isProduction = body.isProduction || false;
+		const paypalAccount = body.paypalAccount || undefined;
 
 		const origin = request.headers.get('origin') || 'http://localhost:5173';
 
@@ -31,7 +32,7 @@ export async function POST({ request }) {
 			}
 		};
 
-		const result = await createBillingAgreementToken(agreementData, isProduction);
+		const result = await createBillingAgreementToken(agreementData, isProduction, paypalAccount);
 
 		// Extract the approval URL from links
 		const approvalUrl = result.links?.find((link) => link.rel === 'approval_url')?.href;

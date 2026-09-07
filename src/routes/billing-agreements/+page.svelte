@@ -3,6 +3,7 @@
 	import { page } from "$app/stores";
 
 	let isProduction = false;
+	let paypalAccount = "default";
 	let loading = false;
 	let errorMessage = "";
 	let errorHint = "";
@@ -49,6 +50,7 @@
 		try {
 			const requestBody = {
 				isProduction,
+				paypalAccount: paypalAccount !== 'default' ? paypalAccount : undefined,
 			};
 
 			addLog("POST /api/billing-agreements/create-token", requestBody, 'request');
@@ -68,9 +70,10 @@
 
 			if (data.approval_url) {
 				addLog("Redirecting to PayPal", data.approval_url, 'info');
-				// Store token_id and environment preference before redirect
+				// Store token_id, environment, and account preference before redirect
 				sessionStorage.setItem("ba_token_id", data.token_id);
 				sessionStorage.setItem("ba_isProduction", isProduction.toString());
+				sessionStorage.setItem("ba_paypalAccount", paypalAccount);
 				window.location.href = data.approval_url;
 			} else {
 				throw new Error("No approval URL received from PayPal");
@@ -89,14 +92,23 @@
 		errorMessage = "";
 
 		try {
-			// Restore environment preference from before redirect
+			// Restore environment and account preference from before redirect
 			const savedEnv = sessionStorage.getItem("ba_isProduction");
 			if (savedEnv !== null) {
 				isProduction = savedEnv === "true";
 				sessionStorage.removeItem("ba_isProduction");
 			}
+			const savedAccount = sessionStorage.getItem("ba_paypalAccount");
+			if (savedAccount !== null) {
+				paypalAccount = savedAccount;
+				sessionStorage.removeItem("ba_paypalAccount");
+			}
 
-			const requestBody = { token, isProduction };
+			const requestBody = {
+				token,
+				isProduction,
+				paypalAccount: paypalAccount !== 'default' ? paypalAccount : undefined,
+			};
 			addLog("POST /api/billing-agreements/execute", requestBody, 'request');
 
 			const response = await fetch("/api/billing-agreements/execute", {
@@ -160,6 +172,7 @@
 			const requestBody = {
 				billingAgreementId: vaultTargetId,
 				isProduction: vaultEnv,
+				paypalAccount: paypalAccount !== 'default' ? paypalAccount : undefined,
 			};
 			if (merchantAccountId.trim()) {
 				requestBody.merchantAccountId = merchantAccountId.trim();
@@ -281,6 +294,20 @@
 						<span class="sr-only">Toggle Environment</span>
 						<span class={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isProduction ? "translate-x-6" : "translate-x-1"}`}></span>
 					</button>
+				</div>
+
+				<!-- PayPal Account Selector -->
+				<div class="bg-white rounded-md p-3 border border-gray-200">
+					<label for="paypalAccountSelect" class="block text-sm font-semibold text-gray-700 mb-1">PayPal Account</label>
+					<select
+						id="paypalAccountSelect"
+						bind:value={paypalAccount}
+						class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+					>
+						<option value="default">Default (USD)</option>
+						<option value="jpy">JPY</option>
+					</select>
+					<p class="text-xs text-gray-500 mt-1">Selects which PayPal REST app credentials to use for billing agreement APIs.</p>
 				</div>
 
 			</div>

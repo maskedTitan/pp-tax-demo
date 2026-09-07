@@ -12,8 +12,8 @@ function getApiBase(isProduction = false) {
  * @param {object} agreementData - Agreement token request body
  * @param {boolean} isProduction - Whether to use production environment
  */
-export async function createBillingAgreementToken(agreementData, isProduction = false) {
-	const accessToken = await getPayPalAccessToken(isProduction);
+export async function createBillingAgreementToken(agreementData, isProduction = false, paypalAccount) {
+	const accessToken = await getPayPalAccessToken(isProduction, paypalAccount);
 
 	const response = await fetch(`${getApiBase(isProduction)}/v1/billing-agreements/agreement-tokens`, {
 		method: 'POST',
@@ -43,8 +43,8 @@ export async function createBillingAgreementToken(agreementData, isProduction = 
  * @param {boolean} isProduction - Whether to use production environment
  * @returns {Promise<{ ok: boolean, status: number, body: any }>}
  */
-export async function getBillingAgreement(agreementId, isProduction = false) {
-	const accessToken = await getPayPalAccessToken(isProduction);
+export async function getBillingAgreement(agreementId, isProduction = false, paypalAccount) {
+	const accessToken = await getPayPalAccessToken(isProduction, paypalAccount);
 
 	const response = await fetch(
 		`${getApiBase(isProduction)}/v1/billing-agreements/agreements/${encodeURIComponent(agreementId)}`,
@@ -71,8 +71,8 @@ export async function getBillingAgreement(agreementId, isProduction = false) {
  * @param {string} tokenId - The agreement token from the approval redirect
  * @param {boolean} isProduction - Whether to use production environment
  */
-export async function executeBillingAgreement(tokenId, isProduction = false) {
-	const accessToken = await getPayPalAccessToken(isProduction);
+export async function executeBillingAgreement(tokenId, isProduction = false, paypalAccount) {
+	const accessToken = await getPayPalAccessToken(isProduction, paypalAccount);
 
 	const response = await fetch(`${getApiBase(isProduction)}/v1/billing-agreements/agreements`, {
 		method: 'POST',

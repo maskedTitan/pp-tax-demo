@@ -8,13 +8,13 @@ import { executeBillingAgreement } from '$lib/billingAgreements.js';
 export async function POST({ request }) {
 	try {
 		const body = await request.json();
-		const { token, isProduction } = body;
+		const { token, isProduction, paypalAccount } = body;
 
 		if (!token) {
 			return json({ error: 'Missing agreement token' }, { status: 400 });
 		}
 
-		const result = await executeBillingAgreement(token, isProduction || false);
+		const result = await executeBillingAgreement(token, isProduction || false, paypalAccount || undefined);
 
 		return json({
 			id: result.id,
