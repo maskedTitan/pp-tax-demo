@@ -147,7 +147,14 @@
                 })
             });
             const result = await res.json();
-            log('Vault checkout result', result, 'response');
+            if (result.mutations) {
+                result.mutations.forEach((m) => {
+                    log(`GraphQL: ${m.mutation}`, m.request, 'request');
+                    log(`GraphQL: ${m.mutation}`, m.response, 'response');
+                });
+            } else {
+                log('Vault checkout result', result, 'response');
+            }
 
             if (!result.success) {
                 errorMessage = `Vault failed: ${result.error}`;
@@ -327,7 +334,14 @@
                 body: JSON.stringify(body)
             });
             const result = await res.json();
-            log('Checkout result', result, 'response');
+            if (result.mutations) {
+                result.mutations.forEach((m) => {
+                    log(`GraphQL: ${m.mutation}`, m.request, 'request');
+                    log(`GraphQL: ${m.mutation}`, m.response, 'response');
+                });
+            } else {
+                log('Checkout result', result, 'response');
+            }
 
             if (result.success) {
                 paymentSuccess = true;

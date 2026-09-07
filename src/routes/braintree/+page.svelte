@@ -313,7 +313,14 @@
             });
             const result = await res.json();
 
-            addLog("Server responded with transaction result", result, 'response');
+            if (result.mutations) {
+                result.mutations.forEach((m) => {
+                    addLog(`GraphQL: ${m.mutation}`, m.request, 'request');
+                    addLog(`GraphQL: ${m.mutation}`, m.response, 'response');
+                });
+            } else {
+                addLog("Server responded with transaction result", result, 'response');
+            }
 
             if (result.success) {
                 paymentSuccess = true;
@@ -362,7 +369,14 @@
             });
             const result = await res.json();
 
-            addLog("Charge vaulted token result", result, 'response');
+            if (result.mutations) {
+                result.mutations.forEach((m) => {
+                    addLog(`GraphQL: ${m.mutation}`, m.request, 'request');
+                    addLog(`GraphQL: ${m.mutation}`, m.response, 'response');
+                });
+            } else {
+                addLog("Charge vaulted token result", result, 'response');
+            }
 
             if (result.success) {
                 paymentResult = {
