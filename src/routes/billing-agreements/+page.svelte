@@ -306,6 +306,7 @@
 					>
 						<option value="default">Default (USD)</option>
 						<option value="jpy">JPY</option>
+						<option value="mxn">MXN</option>
 					</select>
 					<p class="text-xs text-gray-500 mt-1">Selects which PayPal REST app credentials to use for billing agreement APIs.</p>
 				</div>
