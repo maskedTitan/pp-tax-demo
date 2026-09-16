@@ -117,7 +117,7 @@ export async function POST({ request }) {
                     // Which PayPal app owns the agreement, and which merchant account
                     // Braintree imports as - the pair that has to line up.
                     paypalClientId: paypalAccount && paypalAccount !== 'default'
-                        ? publicEnv[`PUBLIC_PAYPAL_${paypalAccount.toUpperCase()}_CLIENT_ID`]
+                        ? env[`PAYPAL_${paypalAccount.toUpperCase()}_CLIENT_ID`]
                         : (isProduction ? publicEnv.PUBLIC_PAYPAL_PROD_CLIENT_ID : publicEnv.PUBLIC_PAYPAL_CLIENT_ID)
                 },
                 response: lookup.ok

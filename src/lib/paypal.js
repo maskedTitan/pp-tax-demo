@@ -20,10 +20,10 @@ function getApiBase(isProduction = false) {
 function getCredentials(isProduction = false, paypalAccount) {
 	if (paypalAccount && paypalAccount !== 'default') {
 		const tag = paypalAccount.toUpperCase(); // e.g. "jpy" -> "JPY"
-		const clientId = publicEnv[`PUBLIC_PAYPAL_${tag}_CLIENT_ID`];
+		const clientId = privateEnv[`PAYPAL_${tag}_CLIENT_ID`];
 		const clientSecret = privateEnv[`PAYPAL_${tag}_CLIENT_SECRET`];
 		if (!clientId || !clientSecret) {
-			throw new Error(`PayPal credentials not configured for account "${paypalAccount}" (looked for PUBLIC_PAYPAL_${tag}_CLIENT_ID / PAYPAL_${tag}_CLIENT_SECRET)`);
+			throw new Error(`PayPal credentials not configured for account "${paypalAccount}" (looked for PAYPAL_${tag}_CLIENT_ID / PAYPAL_${tag}_CLIENT_SECRET)`);
 		}
 		return { clientId, clientSecret };
 	}
