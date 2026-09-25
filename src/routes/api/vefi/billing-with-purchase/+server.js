@@ -49,6 +49,7 @@ export async function POST({ request }) {
         const saleResult = await gateway.transaction.sale({
             amount,
             paymentMethodToken: savedPaymentMethodToken,
+            merchantAccountId: 'paypal_au',
             options: { submitForSettlement: true },
         });
         if (!saleResult.success) {

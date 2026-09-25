@@ -20,6 +20,7 @@ export async function POST({ request }) {
         const result = await gateway.transaction.sale({
             amount,
             paymentMethodToken,
+            merchantAccountId: 'paypal_au',
             options: { submitForSettlement: true },
         });
 

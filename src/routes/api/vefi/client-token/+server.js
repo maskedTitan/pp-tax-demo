@@ -7,7 +7,7 @@ import { gateway } from '$lib/server/braintree.js';
  */
 export async function GET() {
     try {
-        const result = await gateway.clientToken.generate({});
+        const result = await gateway.clientToken.generate({ merchantAccountId: 'paypal_au' });
         return json({ clientToken: result.clientToken });
     } catch (error) {
         return json({ error: error.message }, { status: 500 });

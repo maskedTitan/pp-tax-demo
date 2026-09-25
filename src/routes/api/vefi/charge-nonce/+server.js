@@ -21,6 +21,7 @@ export async function POST({ request }) {
         const result = await gateway.transaction.sale({
             amount,
             paymentMethodNonce,
+            merchantAccountId: 'paypal_au',
             options: { submitForSettlement: true },
         });
 
