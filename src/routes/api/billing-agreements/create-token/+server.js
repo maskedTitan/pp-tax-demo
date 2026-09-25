@@ -1,13 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { createBillingAgreementToken } from '$lib/billingAgreements.js';
 
-const ACCOUNT_LABELS = {
-	default: 'Orbit Store (US)',
-	jpy:     'Sakura Store (JP)',
-	mxn:     'Mercado Store (MX)',
-	au:      'Outback Store (AU)'
-};
-
 /**
  * POST /api/billing-agreements/create-token
  * Creates a PayPal billing agreement token (legacy v1 API)
@@ -19,7 +12,6 @@ export async function POST({ request }) {
 		const paypalAccount = body.paypalAccount || undefined;
 
 		const origin = request.headers.get('origin') || 'http://localhost:5173';
-		const label = ACCOUNT_LABELS[paypalAccount] ?? ACCOUNT_LABELS.default;
 
 		const agreementData = {
 			description: body.description || 'Billing Agreement',
@@ -35,8 +27,7 @@ export async function POST({ request }) {
 					notify_url: body.notify_url || undefined,
 					accepted_pymt_type: 'INSTANT',
 					skip_shipping_address: body.skip_shipping_address || false,
-					immutable_shipping_address: body.immutable_shipping_address || true,
-					label
+					immutable_shipping_address: body.immutable_shipping_address || true
 				}
 			}
 		};
