@@ -31,12 +31,21 @@ export async function POST({ request }) {
             return json({ error: result.message }, { status: 400 });
         }
 
+        const pa = result.transaction.paypalAccount ?? {};
         return json({
             success: true,
             transactionId: result.transaction.id,
             status: result.transaction.status,
             customerId: result.transaction.customer?.id ?? null,
-            savedPaymentMethodToken: result.transaction.paypalAccount?.token ?? null,
+            savedPaymentMethodToken: pa.token ?? null,
+            // Full paypalAccount for debugging — helps confirm whether the vault token
+            // was returned and which fields are populated.
+            paypalAccount: {
+                token: pa.token ?? null,
+                payerEmail: pa.payerEmail ?? null,
+                payerId: pa.payerId ?? null,
+                billingAgreementId: pa.billingAgreementId ?? null,
+            },
         });
     } catch (error) {
         return json({ error: error.message }, { status: 500 });

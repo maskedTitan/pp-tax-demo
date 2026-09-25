@@ -347,7 +347,7 @@
 				{/if}
 
 				<!-- Post-Flow-1 shortcut -->
-				{#if flowMode === 'flow1' && lastResult?.savedPaymentMethodToken}
+				{#if flowMode === 'flow1' && lastResult?.success}
 					<div class="bg-blue-50 rounded-lg border border-blue-200 p-4">
 						<p class="text-sm text-blue-800 font-medium mb-2">PMT saved. Simulate a return visit?</p>
 						<button
