@@ -53,7 +53,20 @@ export async function GET({ url }) {
             );
         }
 
-        return json({ clientToken });
+        // Decode the client token to verify paymentMethodIdJwt is present.
+        // This JWT is what drives the edit-FI pencil in SavedPaymentMethods.
+        let tokenDebug = {};
+        try {
+            const decoded = JSON.parse(Buffer.from(clientToken, 'base64').toString('utf-8'));
+            tokenDebug = {
+                version: decoded.version ?? null,
+                hasPaymentMethodIdJwt: !!decoded.paymentMethodIdJwt,
+                hasAuthorizationFingerprint: !!decoded.authorizationFingerprint,
+                paypalClientId: decoded.paypalClientId ?? null,
+            };
+        } catch { /* ignore decode errors */ }
+
+        return json({ clientToken, tokenDebug });
     } catch (error) {
         return json({ error: error.message }, { status: 500 });
     }
