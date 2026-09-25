@@ -160,7 +160,7 @@
 		addLog('GET /api/vefi/token', { paymentMethodToken: savedToken }, 'request');
 		const res = await fetch(`/api/vefi/token?paymentMethodToken=${encodeURIComponent(savedToken)}`);
 		const tokenData = await res.json();
-		addLog('Response /api/vefi/token', { clientToken: tokenData.clientToken ? '[token]' : null, error: tokenData.error }, 'response');
+		addLog('Response /api/vefi/token', { clientToken: tokenData.clientToken ? '[token]' : null, error: tokenData.error, tokenDebug: tokenData.tokenDebug }, 'response');
 		if (tokenData.error) throw new Error(tokenData.error);
 
 		const bt = window.braintree;
