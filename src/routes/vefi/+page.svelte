@@ -58,8 +58,7 @@
 
 		try {
 			await loadScript(`${BETA_BASE}/client.min.js`);
-			await loadScript(`${BETA_BASE}/paypalcheckout.min.js`);
-			await loadScript(`${BETA_BASE}/datacollector.min.js`);
+			await loadScript(`${BETA_BASE}/paypal-checkout.min.js`);
 			sdkReady = true;
 			addLog('SDK ready', 'braintree-web 3.142.0-beta-editfi.1 loaded from CDN', 'info');
 			await initFlow();
