@@ -112,7 +112,7 @@
 
 		window.paypal.Buttons({
 			fundingSource: window.paypal.FUNDING.PAYPAL,
-			createOrder: () => paypalCheckout.createPayment({
+			createBillingAgreement: () => paypalCheckout.createPayment({
 				flow: 'vault',
 				enableShippingAddress: false,
 				billingAgreementDescription: 'Save PayPal for future payments',
