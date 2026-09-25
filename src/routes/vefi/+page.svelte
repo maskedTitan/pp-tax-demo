@@ -122,9 +122,11 @@
 			}),
 			onApprove: async (data) => {
 				try {
-					const { nonce } = await paypalCheckout.tokenizePayment(data);
-					const body = { nonce, amount };
-					addLog('POST /api/vefi/billing-with-purchase', { amount }, 'request');
+					const tokenized = await paypalCheckout.tokenizePayment(data);
+					const { nonce, details } = tokenized;
+					addLog('tokenizePayment', { type: tokenized.type, details }, 'info');
+					const body = { nonce, amount, billingAgreementId: details?.billingAgreementId ?? null };
+					addLog('POST /api/vefi/billing-with-purchase', { amount, billingAgreementId: body.billingAgreementId }, 'request');
 					const result = await fetch('/api/vefi/billing-with-purchase', {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
