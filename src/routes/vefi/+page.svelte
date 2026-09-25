@@ -105,7 +105,6 @@
 		await paypalCheckout.loadPayPalSDK({
 			vault: true,
 			currency: 'USD',
-			intent: 'capture',
 			components: 'buttons,messages,saved-payment-methods',
 			env: 'sandbox',
 		});
