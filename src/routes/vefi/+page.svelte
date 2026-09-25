@@ -114,11 +114,9 @@
 		window.paypal.Buttons({
 			fundingSource: window.paypal.FUNDING.PAYPAL,
 			createOrder: () => paypalCheckout.createPayment({
-				flow: 'checkout',
-				amount,
-				currency: 'USD',
-				intent: 'capture',
-				requestBillingAgreement: true,
+				flow: 'vault',
+				enableShippingAddress: false,
+				billingAgreementDescription: 'Save PayPal for future payments',
 			}),
 			onApprove: async (data) => {
 				try {
