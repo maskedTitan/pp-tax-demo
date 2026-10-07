@@ -275,7 +275,7 @@
     async function submitNonceToServer(payload) {
         try {
             addLog("Submitting nonce to server...");
-            const amountStr = zeroDollarAuth ? '0.00' : currentTotal.toString();
+            const amountStr = zeroDollarAuth ? '0.00' : (sessionAmount || currentTotal.toString());
             const body = {
                 nonce: payload.nonce,
                 isVault: zeroDollarAuth || isRecurring,
