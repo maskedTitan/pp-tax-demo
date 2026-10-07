@@ -1,9 +1,10 @@
 import { json } from '@sveltejs/kit';
 import { braintreeGraphql } from '$lib/server/braintree.js';
 
-const CHARGE_MUTATION = `
-mutation ChargePaymentMethod($input: ChargePaymentMethodInput!) {
-  chargePaymentMethod(input: $input) {
+// For initial checkout charges (nonce from client SDK)
+const CHARGE_PAYPAL_MUTATION = `
+mutation ChargePayPalAccount($input: ChargePayPalAccountInput!) {
+  chargePayPalAccount(input: $input) {
     transaction {
       id
       legacyId
@@ -25,15 +26,30 @@ mutation ChargePaymentMethod($input: ChargePaymentMethodInput!) {
       }
       paymentMethodSnapshot {
         ... on PayPalTransactionDetails {
+          captureId
+          payerStatus
+          sellerProtectionStatus
           payer {
             payerId
             email
           }
         }
       }
+      shipping {
+        shippingAmount
+        shippingAddress {
+          addressLine1
+          addressLine2
+          adminArea1
+          adminArea2
+          postalCode
+          countryCode
+        }
+      }
     }
   }
 }`;
+
 
 const VAULT_MUTATION = `
 mutation VaultPaymentMethod($input: VaultPaymentMethodInput!) {
@@ -51,17 +67,32 @@ mutation VaultPaymentMethod($input: VaultPaymentMethodInput!) {
   }
 }`;
 
-function extractTransaction(data) {
-    const tx = data.data?.chargePaymentMethod?.transaction;
+const FAILED_STATUSES = new Set([
+    'PROCESSOR_DECLINED',
+    'GATEWAY_REJECTED',
+    'FAILED',
+    'AUTHORIZATION_EXPIRED',
+    'SETTLEMENT_DECLINED',
+]);
+
+function extractPayPalTransaction(data) {
+    const tx = data.data?.chargePayPalAccount?.transaction;
     if (!tx) return {};
     const vaultedPm = tx.customer?.paymentMethods?.edges?.[0]?.node;
+    const snapshot = tx.paymentMethodSnapshot;
     return {
         transactionId: tx.legacyId || tx.id || null,
+        status: tx.status || null,
         vaultToken: vaultedPm?.legacyId || null,
         vaultPaymentMethodId: vaultedPm?.id || null,
-        payerId: tx.paymentMethodSnapshot?.payer?.payerId || null,
+        payerId: snapshot?.payer?.payerId || null,
+        captureId: snapshot?.captureId || null,
+        payerStatus: snapshot?.payerStatus || null,
+        sellerProtectionStatus: snapshot?.sellerProtectionStatus || null,
+        failed: FAILED_STATUSES.has(tx.status),
     };
 }
+
 
 export async function POST({ request }) {
     try {
@@ -70,21 +101,26 @@ export async function POST({ request }) {
         const mutations = [];
 
         if ((type === 'paymentMethodToken' && paymentMethodToken) || (type === 'paymentMethodId' && paymentMethodId)) {
-            // Charge via vaulted payment method (GraphQL ID or legacy token)
+            // Charge via vaulted payment method
             const input = {
                 paymentMethodId: paymentMethodId || paymentMethodToken,
                 transaction: { amount: amount || '10.00' },
             };
 
-            const data = await braintreeGraphql(CHARGE_MUTATION, { input });
-            mutations.push({ mutation: 'chargePaymentMethod', request: input, response: data });
+            const data = await braintreeGraphql(CHARGE_PAYPAL_MUTATION, { input });
+            mutations.push({ mutation: 'chargePayPalAccount', request: input, response: data });
 
             if (data.errors?.length) {
                 const errorMessage = data.errors.map(e => e.message).join('; ');
                 return json({ success: false, error: errorMessage, mutations }, { status: 400 });
             }
 
-            return json({ success: true, ...extractTransaction(data), mutations });
+            const txResult = extractPayPalTransaction(data);
+            if (txResult.failed) {
+                return json({ success: false, error: `Transaction ${txResult.status}: ${txResult.transactionId}`, ...txResult, mutations }, { status: 400 });
+            }
+
+            return json({ success: true, ...txResult, mutations });
 
         } else if (createCustomer || (isVault && amount === '0.00')) {
             // Vault-only ($0 auth) — vault the nonce without charging
@@ -109,6 +145,7 @@ export async function POST({ request }) {
 
         } else {
             // Standard sale — optionally vault after transacting (recurring flow)
+            // Uses chargePayPalAccount for initial checkout with nonce
             const input = {
                 paymentMethodId: nonce,
                 transaction: { amount: amount || '10.00' },
@@ -118,15 +155,20 @@ export async function POST({ request }) {
                 input.transaction.vaultPaymentMethodAfterTransacting = { when: 'ON_SUCCESSFUL_TRANSACTION' };
             }
 
-            const data = await braintreeGraphql(CHARGE_MUTATION, { input });
-            mutations.push({ mutation: 'chargePaymentMethod', request: input, response: data });
+            const data = await braintreeGraphql(CHARGE_PAYPAL_MUTATION, { input });
+            mutations.push({ mutation: 'chargePayPalAccount', request: input, response: data });
 
             if (data.errors?.length) {
                 const errorMessage = data.errors.map(e => e.message).join('; ');
                 return json({ success: false, error: errorMessage, mutations }, { status: 400 });
             }
 
-            return json({ success: true, ...extractTransaction(data), mutations });
+            const txResult = extractPayPalTransaction(data);
+            if (txResult.failed) {
+                return json({ success: false, error: `Transaction ${txResult.status}: ${txResult.transactionId}`, ...txResult, mutations }, { status: 400 });
+            }
+
+            return json({ success: true, ...txResult, mutations });
         }
     } catch (error) {
         console.error('Transaction error:', error);

@@ -8,6 +8,7 @@
     let paymentResult = null;
     let paypalLoading = true;
     let sessionRef = null;
+    let eligibilityResult = null;
 
     // Developer Logs
     let logs = [];
@@ -121,7 +122,7 @@
             }
 
             addLog("Loading Braintree CDN scripts...");
-            const base = "https://js.braintreegateway.com/web/3.141.0/js";
+            const base = "https://js.braintreegateway.com/web/3.146.0/js";
             await loadScript(`${base}/client.min.js`);
             await loadScript(`${base}/paypal-checkout-v6.min.js`);
             addLog("CDN scripts loaded");
@@ -135,6 +136,22 @@
             addLog("Loading PayPal SDK...");
             await paypalV6Instance.loadPayPalSDK();
             addLog("PayPal SDK loaded");
+
+            addLog("Calling findEligibleMethods...");
+            try {
+                const eligibility = await paypalV6Instance.findEligibleMethods({
+                    amount: currentTotal.toString(),
+                    currency: 'USD',
+                });
+                eligibilityResult = {
+                    paypal: eligibility.paypal,
+                    paylater: eligibility.paylater,
+                    credit: eligibility.credit,
+                };
+                addLog("findEligibleMethods result", eligibilityResult, 'response');
+            } catch (err) {
+                addLog("findEligibleMethods error", { message: err.message }, 'error');
+            }
 
             buildSession();
         } catch (err) {
@@ -182,57 +199,63 @@
                 addLog("Created billing agreement session ($0 auth)");
             } else if (isRecurring) {
                 // Charge + vault in one flow
-                sessionRef = paypalV6Instance.createCheckoutWithVaultSession({
+                const checkoutWithVaultOptions = {
                     amount: currentTotal.toString(),
                     currency: "USD",
                     intent: "capture",
                     billingAgreementDetails: { description: "Save PayPal for future charges" },
                     onApprove,
-                    ...(!disableShipping && {
-                        onShippingAddressChange: (data) => {
-                            const stateCode = data.shippingAddress?.stateOrProvinceCode || data.shippingAddress?.state;
-                            const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
-                            if (newTotal === sessionAmount) {
-                                addLog("onShippingAddressChange — amount unchanged, skipping update", { stateCode, newTotal });
-                                return Promise.resolve();
-                            }
-                            addLog("onShippingAddressChange — updating amount", { stateCode, newTotal });
-                            sessionAmount = newTotal;
-                            return paypalV6Instance.updatePayment({
-                                paymentId: data.orderId,
-                                amount: newTotal,
-                                currency: "USD",
-                            });
+                };
+                if (!disableShipping) {
+                    checkoutWithVaultOptions.enableShippingAddress = true;
+                    checkoutWithVaultOptions.onShippingAddressChange = (data) => {
+                        addLog("onShippingAddressChange (vault) — raw callback data", data, 'response');
+                        const stateCode = data.shippingAddress?.stateOrProvinceCode || data.shippingAddress?.state;
+                        const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
+                        if (newTotal === sessionAmount) {
+                            addLog("onShippingAddressChange (vault) — amount unchanged, skipping update", { stateCode, newTotal });
+                            return Promise.resolve();
                         }
-                    }),
-                });
-                addLog("Created checkout-with-vault session (recurring)");
+                        addLog("onShippingAddressChange (vault) — updating amount", { stateCode, newTotal });
+                        sessionAmount = newTotal;
+                        return paypalV6Instance.updatePayment({
+                            paymentId: data.orderId,
+                            amount: newTotal,
+                            currency: "USD",
+                        });
+                    };
+                }
+                sessionRef = paypalV6Instance.createCheckoutWithVaultSession(checkoutWithVaultOptions);
+                addLog("Created checkout-with-vault session (recurring)", { enableShippingAddress: !disableShipping });
             } else {
                 // Standard one-time payment
-                sessionRef = paypalV6Instance.createOneTimePaymentSession({
+                const oneTimeOptions = {
                     amount: currentTotal.toString(),
                     currency: "USD",
                     intent: "capture",
                     onApprove,
-                    ...(!disableShipping && {
-                        onShippingAddressChange: (data) => {
-                            const stateCode = data.shippingAddress?.stateOrProvinceCode || data.shippingAddress?.state;
-                            const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
-                            if (newTotal === sessionAmount) {
-                                addLog("onShippingAddressChange — amount unchanged, skipping update", { stateCode, newTotal });
-                                return Promise.resolve();
-                            }
-                            addLog("onShippingAddressChange — updating amount", { stateCode, newTotal });
-                            sessionAmount = newTotal;
-                            return paypalV6Instance.updatePayment({
-                                paymentId: data.orderId,
-                                amount: newTotal,
-                                currency: "USD",
-                            });
+                };
+                if (!disableShipping) {
+                    oneTimeOptions.enableShippingAddress = true;
+                    oneTimeOptions.onShippingAddressChange = (data) => {
+                        addLog("onShippingAddressChange — raw callback data", data, 'response');
+                        const stateCode = data.shippingAddress?.stateOrProvinceCode || data.shippingAddress?.state;
+                        const newTotal = calculateTotal(PRODUCT_SUBTOTAL, stateCode);
+                        if (newTotal === sessionAmount) {
+                            addLog("onShippingAddressChange — amount unchanged, skipping update", { stateCode, newTotal });
+                            return Promise.resolve();
                         }
-                    }),
-                });
-                addLog("Created one-time payment session");
+                        addLog("onShippingAddressChange — updating amount", { stateCode, newTotal });
+                        sessionAmount = newTotal;
+                        return paypalV6Instance.updatePayment({
+                            paymentId: data.orderId,
+                            amount: newTotal,
+                            currency: "USD",
+                        });
+                    };
+                }
+                sessionRef = paypalV6Instance.createOneTimePaymentSession(oneTimeOptions);
+                addLog("Created one-time payment session", { enableShippingAddress: !disableShipping });
             }
             paypalLoading = false;
         } catch (err) {
@@ -409,6 +432,20 @@
                         {/if}
                     </div>
 
+                    <!-- Eligible Payment Methods -->
+                    {#if eligibilityResult}
+                        <div class="bg-white rounded-md p-3 border border-gray-200">
+                            <p class="text-sm font-semibold text-gray-700 mb-2">Eligible Payment Methods</p>
+                            <div class="flex gap-2 flex-wrap">
+                                {#each [['PayPal', eligibilityResult.paypal], ['Pay Later', eligibilityResult.paylater], ['Credit', eligibilityResult.credit]] as [label, eligible]}
+                                    <span class="px-2 py-1 rounded text-xs font-semibold {eligible ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}">
+                                        {eligible ? '✓' : '✗'} {label}
+                                    </span>
+                                {/each}
+                            </div>
+                        </div>
+                    {/if}
+
                     <!-- Service Address -->
                     <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
                         <button onclick={() => (showServiceAddress = !showServiceAddress)} class="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors">
@@ -565,52 +602,50 @@
                     </div>
 
                     <!-- Charge Stored Token -->
-                    {#if paymentResult?.vaultPaymentMethodId}
-                        <div class="bg-white rounded-lg border border-gray-200 p-5 mt-4">
-                            <h3 class="font-bold text-gray-900 mb-1">Charge Stored Token</h3>
-                            <p class="text-xs text-gray-500 mb-4">Use the vaulted payment method to make a merchant-initiated charge via GraphQL.</p>
+                    <div class="bg-white rounded-lg border border-gray-200 p-5 mt-4">
+                        <h3 class="font-bold text-gray-900 mb-1">Charge Stored Token</h3>
+                        <p class="text-xs text-gray-500 mb-4">Use the vaulted payment method to make a merchant-initiated charge via GraphQL.</p>
 
-                            <div class="space-y-3">
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">Payment Method Token</label>
-                                    <input type="text" bind:value={chargeTokenId}
-                                        class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono bg-gray-50"
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">Amount (USD)</label>
-                                    <input type="text" bind:value={chargeAmount}
-                                        class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono"
-                                    />
-                                </div>
-                                <button
-                                    onclick={chargeStoredToken}
-                                    disabled={chargingToken || !chargeTokenId}
-                                    class="w-full py-2.5 bg-gray-900 text-white font-bold rounded text-sm transition-all
-                                           disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800"
-                                >
-                                    {chargingToken ? 'Charging...' : 'Charge Token'}
-                                </button>
+                        <div class="space-y-3">
+                            <div>
+                                <label for="charge-token-id" class="block text-xs font-medium text-gray-600 mb-1">Payment Method Token</label>
+                                <input id="charge-token-id" type="text" bind:value={chargeTokenId}
+                                    class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono bg-gray-50"
+                                />
+                            </div>
+                            <div>
+                                <label for="charge-amount" class="block text-xs font-medium text-gray-600 mb-1">Amount (USD)</label>
+                                <input id="charge-amount" type="text" bind:value={chargeAmount}
+                                    class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono"
+                                />
+                            </div>
+                            <button
+                                onclick={chargeStoredToken}
+                                disabled={chargingToken || !chargeTokenId}
+                                class="w-full py-2.5 bg-gray-900 text-white font-bold rounded text-sm transition-all
+                                       disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800"
+                            >
+                                {chargingToken ? 'Charging...' : 'Charge Token'}
+                            </button>
 
-                                {#if chargeResult}
-                                    <div class="bg-green-50 border border-green-200 rounded p-3 text-sm">
-                                        <p class="font-semibold text-green-800">Charge successful</p>
-                                        <div class="mt-2 space-y-1 text-xs text-green-700">
-                                            <div class="flex justify-between">
-                                                <span>Transaction ID</span>
-                                                <code class="bg-white px-2 py-0.5 rounded">{chargeResult.transactionId}</code>
-                                            </div>
+                            {#if chargeResult}
+                                <div class="bg-green-50 border border-green-200 rounded p-3 text-sm">
+                                    <p class="font-semibold text-green-800">Charge successful</p>
+                                    <div class="mt-2 space-y-1 text-xs text-green-700">
+                                        <div class="flex justify-between">
+                                            <span>Transaction ID</span>
+                                            <code class="bg-white px-2 py-0.5 rounded">{chargeResult.transactionId}</code>
                                         </div>
                                     </div>
-                                {/if}
-                                {#if chargeError}
-                                    <div class="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
-                                        {chargeError}
-                                    </div>
-                                {/if}
-                            </div>
+                                </div>
+                            {/if}
+                            {#if chargeError}
+                                <div class="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
+                                    {chargeError}
+                                </div>
+                            {/if}
                         </div>
-                    {/if}
+                    </div>
                 {/if}
             </div>
         </div>
