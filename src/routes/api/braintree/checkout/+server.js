@@ -13,6 +13,10 @@ mutation ChargePayPalAccount($input: ChargePayPalAccountInput!) {
         value
         currencyCode
       }
+      paymentMethod {
+        id
+        legacyId
+      }
       customer {
         id
         paymentMethods(first: 1) {
@@ -79,12 +83,13 @@ function extractPayPalTransaction(data) {
     const tx = data.data?.chargePayPalAccount?.transaction;
     if (!tx) return {};
     const vaultedPm = tx.customer?.paymentMethods?.edges?.[0]?.node;
+    const directPm = tx.paymentMethod;
     const snapshot = tx.paymentMethodSnapshot;
     return {
         transactionId: tx.legacyId || tx.id || null,
         status: tx.status || null,
-        vaultToken: vaultedPm?.legacyId || null,
-        vaultPaymentMethodId: vaultedPm?.id || null,
+        vaultToken: vaultedPm?.legacyId || directPm?.legacyId || null,
+        vaultPaymentMethodId: vaultedPm?.id || directPm?.id || null,
         payerId: snapshot?.payer?.payerId || null,
         captureId: snapshot?.captureId || null,
         payerStatus: snapshot?.payerStatus || null,

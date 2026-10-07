@@ -34,7 +34,7 @@ export const US_STATE_TAX_RATES = {
 	NH: 0.0, // New Hampshire
 	NJ: 6.5, // New Jersey
 	NM: 8.0, // New Mexico
-	NY: 8.5, // New York
+	NY: 12.5, // New York (city + state combined)
 	NC: 7.0, // North Carolina
 	ND: 7.0, // North Dakota
 	OH: 7.0, // Ohio
