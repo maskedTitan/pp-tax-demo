@@ -109,7 +109,7 @@ export async function POST({ request }) {
             // Charge via vaulted payment method
             const input = {
                 paymentMethodId: paymentMethodId || paymentMethodToken,
-                transaction: { amount: amount || '10.00', merchantAccountId: 'migration_test' },
+                transaction: { amount: amount || '10.00', merchantAccountId: 'doomsday_tix' },
             };
 
             const data = await braintreeGraphql(CHARGE_PAYPAL_MUTATION, { input });
@@ -153,7 +153,7 @@ export async function POST({ request }) {
             // Uses chargePayPalAccount for initial checkout with nonce
             const input = {
                 paymentMethodId: nonce,
-                transaction: { amount: amount || '10.00', merchantAccountId: 'migration_test' },
+                transaction: { amount: amount || '10.00', merchantAccountId: 'doomsday_tix' },
             };
 
             if (isVault) {

@@ -1,0 +1,306 @@
+# CLAUDE.md — PayPal Saved Payment Method (Braintree) Integration
+
+Project rules and build spec for integrating PayPal **Saved Payment Method** on top of
+Braintree. Read this before touching any flow code. The constraints in
+[Invariants](#invariants) are non-negotiable — they come from a limited-release beta and
+several of them contradict how the GA Braintree SDK normally behaves.
+
+Stack assumption: **Next.js App Router** (route handlers returning `Response.json`). If the
+repo is Express/Fastify, keep the same logic and swap the handler signatures.
+
+---
+
+## What we're building
+
+One integration that recognizes a returning buyer across visits, stitched from two flows:
+
+| Flow | Buyer | What happens | Building block |
+|------|-------|--------------|----------------|
+| 1 | First-time | Checks out with PayPal **and** saves PayPal in the same approval. Order is charged and the PayPal payment method is vaulted in one flow. | `flow: "checkout"` + `requestBillingAgreement: true`, then `transaction.sale` with `storeInVaultOnSuccess` |
+| 2 | Returning | Sees the saved PayPal account (funding type + last four) rendered inline, with a pencil to change it. Reorders in one tap (Path B) or edits funding first (Path A). | `paypal.SavedPaymentMethods` loaded via the Braintree Web SDK |
+
+**The link between the two flows is the payment method token (PMT).** Flow 1 returns a PMT
+and a customer ID; persist both against the buyer. On return, mint a client token *scoped to
+that PMT* and the Saved Payment Method component renders that exact saved instrument.
+
+End-to-end:
+1. **First purchase (Flow 1):** buyer approves payment + save → server captures the sale →
+   receives `customerId` and the saved PMT.
+2. **Persist:** store `customerId` + PMT against the buyer's profile.
+3. **Return visit (Flow 2):** look up the PMT → mint a PMT-scoped client token → boot the SDK
+   → render `paypal.SavedPaymentMethods`.
+4. **Reorder or edit:** Path B → buyer keeps the saved FI → charge the stored PMT directly.
+   Path A → buyer taps the pencil, swaps funding → server receives a fresh nonce → charge that.
+
+---
+
+## Invariants
+
+These are hard constraints. Do not "optimize" past them.
+
+- **SDK version:** Braintree Web JS SDK beta build **`3.142.0-beta-editfi.1`** (Saved Payment
+  Method beta). Pin **every** braintree-web component to this exact version.
+- **CDN-only. NOT on npm.** `npm install braintree-web@3.142.0-beta-editfi.1` will **not
+  resolve**. Load via `<script>` tags from
+  `https://js.braintreegateway.com/web/3.142.0-beta-editfi.1/js/` and use the global
+  `window.braintree` namespace.
+- **Never mix the beta with a GA build.** Mixing the editfi beta with GA component builds is
+  unsupported.
+- **Single instance.** Load the beta from the CDN exactly once. Ensure no other braintree-web
+  (e.g. a GA version pulled via npm elsewhere on the page) is injected. Two braintree globals
+  at conflicting versions cause subtle breakage.
+- **Additive, not a migration.** `paypal.SavedPaymentMethods` is one isolated component
+  injected by `paypalCheckout.loadPayPalSDK()`. Existing card, standard PayPal button, and
+  current Braintree flows are unchanged and need **no** version bump.
+- **Sandbox only for now.** `loadPayPalSDK` **must** pass `env: 'sandbox'`.
+- **Credentials are server-side only.** Braintree Merchant ID, Public Key, Private Key never
+  reach the client.
+
+---
+
+## Prerequisites (environment, not code)
+
+Document these in the README; the build assumes they're already true:
+
+1. **Braintree sandbox credentials** — Merchant ID, Public Key, Private Key from the Braintree
+   Control Panel.
+2. **PayPal linked to the Braintree gateway** — Settings › Processing › PayPal. **Without this
+   link, PayPal transactions decline with processor code `2046`** even with valid nonces. This
+   is the single most common setup miss.
+3. **Saved Payment Method enabled on the account** — limited-release capability; must be
+   enabled by a PayPal contact before Flow 2 works.
+4. **Beta SDK access** — the CDN build above.
+5. **A sandbox PayPal buyer with at least one funding instrument** for interactive testing.
+
+---
+
+## SDK setup (both flows)
+
+Load all three from the same version:
+
+```html
+<script src="https://js.braintreegateway.com/web/3.142.0-beta-editfi.1/js/client.min.js"></script>
+<script src="https://js.braintreegateway.com/web/3.142.0-beta-editfi.1/js/paypalcheckout.min.js"></script>
+<script src="https://js.braintreegateway.com/web/3.142.0-beta-editfi.1/js/datacollector.min.js"></script>
+```
+
+| Component | Purpose |
+|-----------|---------|
+| `client.min.js` | Core client — `braintree.client.create()` |
+| `paypalcheckout.min.js` | PayPal flows — `paypalCheckout.create()`, `createPayment()`, `loadPayPalSDK()`, `tokenizePayment()` |
+| `datacollector.min.js` | Device data for risk/fraud signals on the sale |
+
+> Note: the guide lists `datacollector.min.js` in setup but never wires it into a flow. If we
+> want device data on the sale, add `braintree.dataCollector.create()` and pass `deviceData`
+> into `transaction.sale`. Not implemented by default — decide explicitly before adding.
+
+**Shared boot sequence** (identical in both flows through `loadPayPalSDK`; only the token
+source and the final render call differ):
+
+```js
+const clientInstance = await braintree.client.create({ authorization: clientToken });
+const paypalCheckout = await braintree.paypalCheckout.create({
+  client: clientInstance,
+  autoSetDataUserIdToken: true, // reads the identity token from the client token onto the SDK load
+});
+await paypalCheckout.loadPayPalSDK({
+  vault: true,
+  currency: 'USD',
+  intent: 'capture',
+  components: 'buttons,messages,saved-payment-methods',
+  env: 'sandbox', // REQUIRED in sandbox
+});
+```
+
+---
+
+## Shared lib
+
+`lib/braintree.ts` — expose `getGateway()` built from `BRAINTREE_MERCHANT_ID`,
+`BRAINTREE_PUBLIC_KEY`, `BRAINTREE_PRIVATE_KEY` (sandbox environment). All server routes import
+this. Add a `.env.example` with those three vars.
+
+---
+
+## Flow 1 — First-time buyer: save-with-purchase
+
+One PayPal approval, two outcomes: the order is charged and the buyer's PayPal account is saved.
+
+### Step 1 (server) — `POST /api/checkout/client-token`
+Return `{ clientToken }` from `getGateway().clientToken.generate()`. No customer record needed
+yet — Braintree creates the customer when the FI is vaulted on the sale (Step 3) and returns
+its ID in the response.
+
+### Step 2 (client) — render the PayPal button in save-with-purchase mode
+After the shared boot, render `paypal.Buttons`:
+
+```js
+paypal.Buttons({
+  fundingSource: paypal.FUNDING.PAYPAL, // PayPal-only: Credit/Pay Later don't support BA-with-purchase
+  createOrder: () => paypalCheckout.createPayment({
+    flow: 'checkout',              // a real purchase...
+    amount: '49.99',
+    currency: 'USD',
+    intent: 'capture',
+    requestBillingAgreement: true, // ...that ALSO saves a saved payment method
+  }),
+  onApprove: async (data) => {
+    const { nonce } = await paypalCheckout.tokenizePayment(data);
+    const res = await fetch('/api/checkout/billing-with-purchase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nonce, amount: '49.99' }),
+    });
+    const result = await res.json();
+    // TODO(persistence): store result.savedPaymentMethodToken AND result.customerId
+    // against the buyer's account. Flow 2 keys off the saved token.
+  },
+  onCancel: () => {/* buyer dismissed the paysheet */},
+  onError: (err) => {/* surface a retry */},
+}).render('#paypal-button-container');
+```
+
+### Step 3 (server) — `POST /api/checkout/billing-with-purchase`
+Body `{ nonce, amount }`. A **single** `transaction.sale` charges and vaults:
+
+```js
+const result = await getGateway().transaction.sale({
+  amount,
+  paymentMethodNonce: nonce,
+  options: {
+    submitForSettlement: true,
+    storeInVaultOnSuccess: true, // charge AND save the saved payment method
+  },
+});
+if (!result.success) return Response.json({ error: result.message }, { status: 400 });
+return Response.json({
+  success: true,
+  transactionId: result.transaction.id,
+  status: result.transaction.status,
+  customerId: result.transaction.customer?.id ?? null,
+  savedPaymentMethodToken: result.transaction.paypalAccount?.token ?? null, // PMT for Flow 2
+});
+```
+
+**Read the saved token from `transaction.paypalAccount.token`.** Persist both `customerId` and
+`savedPaymentMethodToken`.
+
+---
+
+## Flow 2 — Returning buyer: Saved Payment Method
+
+### Step 1 (server) — `GET /api/vefi/token?paymentMethodToken=<PMT>`
+Mint a client token **scoped to the buyer's specific saved FI**. A PMT-scoped token is what
+drives the saved-FI render. Use the Braintree GraphQL `createClientToken` mutation with
+`version: 3`.
+
+```js
+const BT_GRAPHQL_URL = 'https://payments.sandbox.braintree-api.com/graphql';
+const CREATE_CLIENT_TOKEN = `
+  mutation CreateClientToken($input: CreateClientTokenInput!) {
+    createClientToken(input: $input) { clientToken }
+  }`;
+
+const basicAuth = Buffer
+  .from(`${process.env.BRAINTREE_PUBLIC_KEY}:${process.env.BRAINTREE_PRIVATE_KEY}`)
+  .toString('base64');
+
+const res = await fetch(BT_GRAPHQL_URL, {
+  method: 'POST',
+  headers: {
+    Authorization: `Basic ${basicAuth}`,
+    'Braintree-Version': '2019-01-01',
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    query: CREATE_CLIENT_TOKEN,
+    variables: { input: { clientToken: { version: 3, paymentMethodId: paymentMethodToken } } },
+  }),
+});
+const data = await res.json();
+const clientToken = data.data?.createClientToken?.clientToken;
+if (!clientToken) return Response.json({ error: data.errors?.[0]?.message ?? 'token error' }, { status: 400 });
+return Response.json({ clientToken });
+```
+
+`version` **must** be `3`; `paymentMethodId` is the PMT from Flow 1.
+
+### Step 2 (client) — render `SavedPaymentMethods`
+Boot is identical to Flow 1 through `loadPayPalSDK`, except the client token comes from
+`/api/vefi/token?paymentMethodToken=<PMT>`. Only the render call changes — use
+`paypal.SavedPaymentMethods` instead of `paypal.Buttons`:
+
+```js
+paypal.SavedPaymentMethods({
+  fundingSource: paypal.FUNDING.PAYPAL,
+  // Path A — buyer taps the pencil to change funding. The agreement already exists,
+  // so this is an EDIT (editBillingAgreement), NOT a new agreement (requestBillingAgreement).
+  createOrder: () => paypalCheckout.createPayment({
+    flow: 'checkout',
+    amount: '24.99',
+    currency: 'USD',
+    intent: 'capture',
+    editBillingAgreement: true, // required for the edit path
+  }),
+  onApprove: async (data) => {
+    const { nonce } = await paypalCheckout.tokenizePayment(data);
+    // Path A: buyer changed funding → charge the fresh nonce.
+    await fetch('/api/vefi/charge-nonce', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentMethodNonce: nonce, amount: '24.99' }),
+    });
+  },
+}).render('#vefi-container');
+```
+
+**Behavior:** the component renders the saved PayPal account (funding type + last four) with a
+pencil icon. Tap the pencil → paysheet opens → `createOrder → onApprove` fire (**Path A**).
+Leave it as-is and reorder → no paysheet → charge the stored token directly (**Path B**).
+
+### Step 3 (server) — charge, Path A and Path B
+One decision: **did the buyer change funding?**
+
+```js
+// Path A — buyer edited their FI. Charge the fresh nonce from onApprove.
+// POST /api/vefi/charge-nonce   body: { paymentMethodNonce, amount }
+const result = await getGateway().transaction.sale({
+  amount, paymentMethodNonce, options: { submitForSettlement: true },
+});
+
+// Path B — buyer kept the saved FI. Charge the stored token directly — no paysheet, no nonce.
+// POST /api/vefi/charge-token   body: { paymentMethodToken, amount }
+const result = await getGateway().transaction.sale({
+  amount, paymentMethodToken, options: { submitForSettlement: true },
+});
+```
+
+Both: on `!result.success` return `{ error: result.message }` status 400; else return
+`{ transactionId, status }`.
+
+| Path | Buyer action | Client | Server input |
+|------|--------------|--------|--------------|
+| B (no edit) | Reorders with saved FI | No paysheet | `paymentMethodToken` (the stored PMT) |
+| A (edit) | Taps pencil, changes funding | Paysheet → `onApprove` → `tokenizePayment` | `paymentMethodNonce` (fresh) |
+
+---
+
+## Persistence & wiring
+
+- On Flow 1 success, persist `{ customerId, savedPaymentMethodToken }` against the buyer's
+  profile. Use whatever store the repo already has; if none exists, a typed in-memory/JSON stub
+  behind a clear interface is acceptable for now.
+- On return, look up the buyer's PMT → mint the scoped token (`/api/vefi/token`) → render Flow
+  2. Wire the reorder button to `/api/vefi/charge-token` (Path B) using the stored PMT.
+
+---
+
+## Manual sandbox test checklist (TESTING.md)
+
+- **Prereqs:** PayPal linked in Braintree control panel (else processor code `2046`); Saved
+  Payment Method enabled on the account; a sandbox PayPal buyer with ≥1 funding instrument.
+- **Flow 1:** approve → sale settles → response carries `customerId` + `paypalAccount.token`.
+- **Flow 2 Path B:** reorder → `charge-token` succeeds with no paysheet.
+- **Flow 2 Path A:** pencil → paysheet → `onApprove` → `charge-nonce` succeeds.
+- **Single instance:** verify only ONE braintree-web global at `3.142.0-beta-editfi.1` is
+  loaded (no GA build leaking in).

@@ -39,21 +39,21 @@
     let sessionExpired = false;
 
     let serviceAddress = {
-        firstName: "John",
-        lastName: "Doe",
-        houseNumberOrName: "123",
-        street: "1 Rocket Rd",
-        city: "Hawthorne",
-        stateOrProvince: "CA",
-        postalCode: "90250",
+        firstName: "Victor",
+        lastName: "Von Doom",
+        houseNumberOrName: "1",
+        street: "Castle Doom",
+        city: "Doomstadt",
+        stateOrProvince: "NY",
+        postalCode: "10001",
         country: "US",
     };
 
     const demoAddresses = [
-        { label: "California HQ", tax: "8.5%", address: { firstName: "Elon", lastName: "Musk", houseNumberOrName: "1", street: "Rocket Rd", city: "Hawthorne", stateOrProvince: "CA", postalCode: "90250", country: "US" } },
-        { label: "Texas Starbase", tax: "8.0%", address: { firstName: "Star", lastName: "Base", houseNumberOrName: "1", street: "Memories Way", city: "Boca Chica", stateOrProvince: "TX", postalCode: "78521", country: "US" } },
-        { label: "Florida Pad", tax: "7.0%", address: { firstName: "Launch", lastName: "Complex", houseNumberOrName: "39A", street: "Space Center", city: "Merritt Island", stateOrProvince: "FL", postalCode: "32899", country: "US" } },
-        { label: "Delaware Office", tax: "0%", address: { firstName: "John", lastName: "Doe", houseNumberOrName: "1209", street: "Orange St", city: "Wilmington", stateOrProvince: "DE", postalCode: "19801", country: "US" } }
+        { label: "Castle Doom, NY", tax: "12.5%", address: { firstName: "Victor", lastName: "Von Doom", houseNumberOrName: "1", street: "Castle Doom", city: "Doomstadt", stateOrProvince: "NY", postalCode: "10001", country: "US" } },
+        { label: "Latverian Embassy, DC", tax: "6.0%", address: { firstName: "Victor", lastName: "Von Doom", houseNumberOrName: "2300", street: "Embassy Row", city: "Washington", stateOrProvince: "MD", postalCode: "20008", country: "US" } },
+        { label: "Doom Labs, CA", tax: "8.5%", address: { firstName: "Dr", lastName: "Doom", houseNumberOrName: "999", street: "Stark Blvd", city: "Los Angeles", stateOrProvince: "CA", postalCode: "90001", country: "US" } },
+        { label: "Tax Haven, DE", tax: "0%", address: { firstName: "Victor", lastName: "Von Doom", houseNumberOrName: "1209", street: "Orange St", city: "Wilmington", stateOrProvince: "DE", postalCode: "19801", country: "US" } }
     ];
 
     $: currentTax = calculateTax(PRODUCT_SUBTOTAL, serviceAddress.stateOrProvince);
@@ -170,9 +170,6 @@
         const onApprove = async (data) => {
             addLog("onApprove triggered", data, 'response');
             try {
-                // The v6 SDK provides orderId/payerId (camelCase) but tokenizePayment
-                // expects payerID/orderID (uppercase ID). Pass data directly and also
-                // add the uppercase variants so tokenizePayment finds what it needs.
                 const tokenizeArg = {
                     ...data,
                     payerID: data.payerID || data.payerId,
@@ -191,14 +188,12 @@
 
         try {
             if (zeroDollarAuth) {
-                // Pure vault — no charge
                 sessionRef = paypalV6Instance.createBillingAgreementSession({
                     billingAgreementDescription: "Save PayPal for future payments",
                     onApprove,
                 });
                 addLog("Created billing agreement session ($0 auth)");
             } else if (isRecurring) {
-                // Charge + vault in one flow
                 const checkoutWithVaultOptions = {
                     amount: currentTotal.toString(),
                     currency: "USD",
@@ -228,7 +223,6 @@
                 sessionRef = paypalV6Instance.createCheckoutWithVaultSession(checkoutWithVaultOptions);
                 addLog("Created checkout-with-vault session (recurring)", { enableShippingAddress: !disableShipping });
             } else {
-                // Standard one-time payment
                 const oneTimeOptions = {
                     amount: currentTotal.toString(),
                     currency: "USD",
@@ -371,60 +365,66 @@
     });
 </script>
 
-<div class="min-h-screen bg-gray-50">
+<div class="min-h-screen bg-zinc-900">
     <div class="container mx-auto px-8 max-w-7xl py-8">
+        <!-- Header -->
+        <div class="mb-8 text-center">
+            <h1 class="text-2xl font-bold text-emerald-400 tracking-wide uppercase">Doomsday Tix</h1>
+            <p class="text-xs text-zinc-500 mt-1 tracking-widest uppercase">Latverian Ticketing Authority</p>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             <!-- Left Column -->
             <div class="space-y-6">
                 {#if !paymentSuccess}
                     <!-- Checkout Options -->
-                    <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                        <button onclick={() => (showCheckoutOptions = !showCheckoutOptions)} class="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors">
+                    <div class="bg-zinc-800 rounded-lg border border-zinc-700 overflow-hidden">
+                        <button onclick={() => (showCheckoutOptions = !showCheckoutOptions)} class="w-full p-4 flex items-center justify-between text-left hover:bg-zinc-750 transition-colors">
                             <div class="flex items-center gap-3">
-                                <div class="text-blue-600">
+                                <div class="text-emerald-500">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                                     </svg>
                                 </div>
-                                <h3 class="font-bold text-gray-900 text-sm">Checkout Options (Braintree v6)</h3>
+                                <h3 class="font-bold text-zinc-100 text-sm">Checkout Options</h3>
                             </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 transition-transform {showCheckoutOptions ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-zinc-500 transition-transform {showCheckoutOptions ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                             </svg>
                         </button>
 
                         {#if showCheckoutOptions}
-                            <div class="px-4 pb-4 border-t border-gray-100 pt-2 space-y-2">
-                                <label class="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
-                                    <input type="checkbox" bind:checked={disableShipping} class="w-4 h-4 text-blue-600 rounded border-gray-300" />
+                            <div class="px-4 pb-4 border-t border-zinc-700 pt-2 space-y-2">
+                                <label class="flex items-center p-2 rounded hover:bg-zinc-700/50 cursor-pointer">
+                                    <input type="checkbox" bind:checked={disableShipping} class="w-4 h-4 text-emerald-500 rounded border-zinc-600 bg-zinc-700" />
                                     <div class="ml-3">
-                                        <span class="block text-sm font-medium text-gray-900">Disable Shipping Address</span>
-                                        <p class="text-xs text-gray-500">Hide address collection in checkout</p>
+                                        <span class="block text-sm font-medium text-zinc-200">Disable Shipping Address</span>
+                                        <p class="text-xs text-zinc-500">Hide address collection in checkout</p>
                                     </div>
                                 </label>
 
-                                <label class="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
-                                    <input type="checkbox" bind:checked={isRecurring} class="w-4 h-4 text-blue-600 rounded border-gray-300" />
+                                <label class="flex items-center p-2 rounded hover:bg-zinc-700/50 cursor-pointer">
+                                    <input type="checkbox" bind:checked={isRecurring} class="w-4 h-4 text-emerald-500 rounded border-zinc-600 bg-zinc-700" />
                                     <div class="ml-3">
-                                        <span class="block text-sm font-medium text-gray-900">Checkout with Vault (Recurring)</span>
-                                        <p class="text-xs text-gray-500">Charge + save PayPal for future use via <code class="text-blue-600">createCheckoutWithVaultSession</code></p>
+                                        <span class="block text-sm font-medium text-zinc-200">Checkout with Vault (Recurring)</span>
+                                        <p class="text-xs text-zinc-500">Charge + save PayPal via <code class="text-emerald-400">createCheckoutWithVaultSession</code></p>
                                     </div>
                                 </label>
 
-                                <label class="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer pl-6">
-                                    <input type="checkbox" bind:checked={zeroDollarAuth} class="w-4 h-4 text-blue-600 rounded border-gray-300" />
+                                <label class="flex items-center p-2 rounded hover:bg-zinc-700/50 cursor-pointer pl-6">
+                                    <input type="checkbox" bind:checked={zeroDollarAuth} class="w-4 h-4 text-emerald-500 rounded border-zinc-600 bg-zinc-700" />
                                     <div class="ml-3">
-                                        <span class="block text-sm font-medium text-gray-900">$0 Auth (Vault Only)</span>
-                                        <p class="text-xs text-gray-500">Save without charging via <code class="text-blue-600">createBillingAgreementSession</code></p>
+                                        <span class="block text-sm font-medium text-zinc-200">$0 Auth (Vault Only)</span>
+                                        <p class="text-xs text-zinc-500">Save without charging via <code class="text-emerald-400">createBillingAgreementSession</code></p>
                                     </div>
                                 </label>
 
-                                <label class="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
-                                    <input type="checkbox" bind:checked={enableSessionTimeout} class="w-4 h-4 text-blue-600 rounded border-gray-300" />
+                                <label class="flex items-center p-2 rounded hover:bg-zinc-700/50 cursor-pointer">
+                                    <input type="checkbox" bind:checked={enableSessionTimeout} class="w-4 h-4 text-emerald-500 rounded border-zinc-600 bg-zinc-700" />
                                     <div class="ml-3">
-                                        <span class="block text-sm font-medium text-gray-900">Enable Session Timeout</span>
-                                        <p class="text-xs text-gray-500">Expire checkout after {TIMEOUT_SECONDS}s</p>
+                                        <span class="block text-sm font-medium text-zinc-200">Enable Session Timeout</span>
+                                        <p class="text-xs text-zinc-500">Expire checkout after {TIMEOUT_SECONDS}s</p>
                                     </div>
                                 </label>
                             </div>
@@ -433,11 +433,11 @@
 
                     <!-- Eligible Payment Methods -->
                     {#if eligibilityResult}
-                        <div class="bg-white rounded-md p-3 border border-gray-200">
-                            <p class="text-sm font-semibold text-gray-700 mb-2">Eligible Payment Methods</p>
+                        <div class="bg-zinc-800 rounded-md p-3 border border-zinc-700">
+                            <p class="text-sm font-semibold text-zinc-300 mb-2">Eligible Payment Methods</p>
                             <div class="flex gap-2 flex-wrap">
                                 {#each [['PayPal', eligibilityResult.paypal], ['Pay Later', eligibilityResult.paylater], ['Credit', eligibilityResult.credit]] as [label, eligible]}
-                                    <span class="px-2 py-1 rounded text-xs font-semibold {eligible ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}">
+                                    <span class="px-2 py-1 rounded text-xs font-semibold {eligible ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-700' : 'bg-zinc-700 text-zinc-500'}">
                                         {eligible ? '✓' : '✗'} {label}
                                     </span>
                                 {/each}
@@ -446,48 +446,48 @@
                     {/if}
 
                     <!-- Service Address -->
-                    <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                        <button onclick={() => (showServiceAddress = !showServiceAddress)} class="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors">
+                    <div class="bg-zinc-800 rounded-lg border border-zinc-700 overflow-hidden">
+                        <button onclick={() => (showServiceAddress = !showServiceAddress)} class="w-full p-4 flex items-center justify-between text-left hover:bg-zinc-750 transition-colors">
                             <div class="flex items-center gap-3">
-                                <div class="text-orange-600">
+                                <div class="text-emerald-500">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
                                 </div>
-                                <h4 class="font-bold text-gray-900 text-sm">Service Address (Tax Calculation)</h4>
+                                <h4 class="font-bold text-zinc-100 text-sm">Service Address (Tax Calculation)</h4>
                             </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 transition-transform {showServiceAddress ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-zinc-500 transition-transform {showServiceAddress ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                             </svg>
                         </button>
 
                         {#if showServiceAddress}
-                            <div class="px-4 pb-4 border-t border-gray-100 pt-3">
+                            <div class="px-4 pb-4 border-t border-zinc-700 pt-3">
                                 <div class="mb-4">
-                                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Quick Fill Demos</p>
+                                    <p class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">Latverian Outposts</p>
                                     <div class="grid grid-cols-2 gap-2">
                                         {#each demoAddresses as demo}
-                                            <button type="button" class="text-left p-3 border {serviceAddress.stateOrProvince === demo.address.stateOrProvince ? 'border-orange-400 bg-orange-50' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'} rounded-lg transition-colors" onclick={() => serviceAddress = { ...demo.address }}>
+                                            <button type="button" class="text-left p-3 border {serviceAddress.stateOrProvince === demo.address.stateOrProvince ? 'border-emerald-600 bg-emerald-900/20' : 'border-zinc-700 bg-zinc-800 hover:border-zinc-600 hover:bg-zinc-750'} rounded-lg transition-colors" onclick={() => serviceAddress = { ...demo.address }}>
                                                 <div class="flex justify-between items-center mb-1">
-                                                    <span class="font-bold text-gray-900 text-xs">{demo.label}</span>
-                                                    <span class="text-[10px] font-bold px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">{demo.tax} Tax</span>
+                                                    <span class="font-bold text-zinc-200 text-xs">{demo.label}</span>
+                                                    <span class="text-[10px] font-bold px-1.5 py-0.5 bg-zinc-700 text-zinc-400 rounded">{demo.tax}</span>
                                                 </div>
-                                                <div class="text-xs text-gray-500 truncate">{demo.address.city}, {demo.address.stateOrProvince}</div>
+                                                <div class="text-xs text-zinc-500 truncate">{demo.address.city}, {demo.address.stateOrProvince}</div>
                                             </button>
                                         {/each}
                                     </div>
                                 </div>
-                                <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+                                <p class="text-xs text-amber-400/80 bg-amber-900/20 border border-amber-700/30 rounded p-2 mb-3">
                                     Note: PayPal JS v6 does not yet support <code>shippingAddressOverride</code>. The address selected here sets the tax rate used for <code>onShippingAddressChange</code> updates only.
                                 </p>
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label for="v6-state" class="block text-xs font-semibold text-gray-700 mb-1">State</label>
-                                        <input id="v6-state" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm uppercase" type="text" bind:value={serviceAddress.stateOrProvince} maxlength="2" />
+                                        <label for="v6-state" class="block text-xs font-semibold text-zinc-400 mb-1">State</label>
+                                        <input id="v6-state" class="w-full px-3 py-2 border border-zinc-600 bg-zinc-700 text-zinc-100 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 text-sm uppercase" type="text" bind:value={serviceAddress.stateOrProvince} maxlength="2" />
                                     </div>
                                     <div>
-                                        <label for="v6-postal" class="block text-xs font-semibold text-gray-700 mb-1">Postal Code</label>
-                                        <input id="v6-postal" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm" type="text" bind:value={serviceAddress.postalCode} />
+                                        <label for="v6-postal" class="block text-xs font-semibold text-zinc-400 mb-1">Postal Code</label>
+                                        <input id="v6-postal" class="w-full px-3 py-2 border border-zinc-600 bg-zinc-700 text-zinc-100 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 text-sm" type="text" bind:value={serviceAddress.postalCode} />
                                     </div>
                                 </div>
                             </div>
@@ -500,46 +500,46 @@
             <div class="space-y-6">
                 {#if !paymentSuccess}
                     {#if sessionExpired}
-                        <div class="p-5 bg-white rounded-lg border border-gray-200">
-                            <p class="text-gray-700 mb-2"><span class="font-medium">Session timed out</span></p>
-                            <button onclick={() => { sessionExpired = false; sessionStartTime = null; remainingTime = null; clearSessionTimer(); }} class="px-4 py-2 bg-gray-900 text-white text-sm rounded hover:bg-gray-800 transition-colors">Restart Checkout</button>
+                        <div class="p-5 bg-zinc-800 rounded-lg border border-zinc-700">
+                            <p class="text-zinc-300 mb-2"><span class="font-medium">Session timed out</span></p>
+                            <button onclick={() => { sessionExpired = false; sessionStartTime = null; remainingTime = null; clearSessionTimer(); }} class="px-4 py-2 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 transition-colors">Restart Checkout</button>
                         </div>
                     {:else}
-                        <div class="p-5 bg-white rounded-lg border border-gray-200 sticky top-6">
+                        <div class="p-5 bg-zinc-800 rounded-lg border border-zinc-700 sticky top-6">
                             <div class="flex items-center gap-2 mb-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                 </svg>
-                                <h4 class="font-bold text-gray-900 text-lg">Complete Payment</h4>
-                                <span class="ml-auto text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded">PayPal JS v6</span>
+                                <h4 class="font-bold text-zinc-100 text-lg">Complete Payment</h4>
+                                <span class="ml-auto text-xs font-semibold bg-emerald-900/50 text-emerald-400 border border-emerald-700 px-2 py-0.5 rounded">PayPal JS v6</span>
                             </div>
 
-                            <div class="mb-4 bg-gray-50 rounded border border-gray-100 p-4">
-                                <div class="flex justify-between items-center pb-2 border-b border-gray-200">
-                                    <span class="text-sm font-medium text-gray-600">Subtotal</span>
-                                    <span class="text-sm font-semibold text-gray-900">${PRODUCT_SUBTOTAL}</span>
+                            <div class="mb-4 bg-zinc-900 rounded border border-zinc-700 p-4">
+                                <div class="flex justify-between items-center pb-2 border-b border-zinc-700">
+                                    <span class="text-sm font-medium text-zinc-400">Subtotal</span>
+                                    <span class="text-sm font-semibold text-zinc-200">${PRODUCT_SUBTOTAL}</span>
                                 </div>
-                                <div class="flex justify-between items-center py-2 border-b border-gray-200">
-                                    <span class="text-sm font-medium text-gray-600">Tax ({currentTaxRate}%)</span>
-                                    <span class="text-sm font-semibold text-gray-900">${currentTax}</span>
+                                <div class="flex justify-between items-center py-2 border-b border-zinc-700">
+                                    <span class="text-sm font-medium text-zinc-400">Tax ({currentTaxRate}%)</span>
+                                    <span class="text-sm font-semibold text-zinc-200">${currentTax}</span>
                                 </div>
                                 <div class="flex justify-between items-center pt-2">
-                                    <span class="text-sm font-medium text-gray-600">Total Due</span>
-                                    <span class="text-xl font-extrabold text-gray-900 tracking-tight">
+                                    <span class="text-sm font-medium text-zinc-400">Total Due</span>
+                                    <span class="text-xl font-extrabold text-emerald-400 tracking-tight">
                                         ${zeroDollarAuth ? '0.00' : currentTotal}
                                     </span>
                                 </div>
                             </div>
 
                             {#if remainingTime !== null && remainingTime < TIMEOUT_SECONDS && !sessionExpired}
-                                <div class="mb-4 bg-orange-50 border border-orange-200 rounded p-2 text-center text-xs text-orange-800 animate-pulse">
+                                <div class="mb-4 bg-red-900/30 border border-red-700/50 rounded p-2 text-center text-xs text-red-400 animate-pulse">
                                     Payment expires in <strong>{Math.floor(remainingTime / 60)}:{Math.floor(remainingTime % 60).toString().padStart(2, '0')}</strong>
                                 </div>
                             {/if}
 
                             <div class="mt-6 mx-auto w-full max-w-[260px]">
                                 {#if paypalLoading}
-                                    <div class="flex items-center justify-center h-12 gap-2 text-gray-400">
+                                    <div class="flex items-center justify-center h-12 gap-2 text-zinc-500">
                                         <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
@@ -547,7 +547,6 @@
                                         <span class="text-sm">Loading payment...</span>
                                     </div>
                                 {:else}
-                                    <!-- Official PayPal v6 custom element — renders the real PayPal button -->
                                     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
                                     <paypal-button
                                         type={zeroDollarAuth || isRecurring ? undefined : 'pay'}
@@ -560,86 +559,86 @@
                     {/if}
 
                     {#if errorMessage}
-                        <div class="bg-red-50 border border-red-200 rounded-lg p-6">
-                            <p class="text-sm font-semibold text-red-800">{errorMessage}</p>
+                        <div class="bg-red-900/30 border border-red-700/50 rounded-lg p-6">
+                            <p class="text-sm font-semibold text-red-400">{errorMessage}</p>
                         </div>
                     {/if}
                 {:else}
-                    <div class="bg-green-50 border border-green-200 rounded-lg p-6">
+                    <div class="bg-emerald-900/30 border border-emerald-700/50 rounded-lg p-6">
                         <div class="flex items-center gap-3 mb-4">
-                            <div class="text-green-600">
+                            <div class="text-emerald-400">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                 </svg>
                             </div>
                             <div>
-                                <h3 class="font-bold text-xl text-green-900">Payment Successful!</h3>
-                                <p class="text-sm text-green-800">Thank you for your order.</p>
+                                <h3 class="font-bold text-xl text-emerald-300">Payment Successful</h3>
+                                <p class="text-sm text-emerald-500">Doom approves this transaction.</p>
                             </div>
                         </div>
-                        <div class="p-5 bg-white rounded-lg border border-gray-200 mt-4 space-y-3 text-sm">
-                            <div class="flex justify-between items-center pb-2 border-b border-gray-100">
-                                <span class="font-semibold text-gray-700">Transaction ID:</span>
-                                <code class="bg-gray-100 px-3 py-1 rounded font-mono text-xs">{paymentResult.transactionId ?? '—'}</code>
+                        <div class="p-5 bg-zinc-800 rounded-lg border border-zinc-700 mt-4 space-y-3 text-sm">
+                            <div class="flex justify-between items-center pb-2 border-b border-zinc-700">
+                                <span class="font-semibold text-zinc-400">Transaction ID:</span>
+                                <code class="bg-zinc-900 text-zinc-200 px-3 py-1 rounded font-mono text-xs">{paymentResult.transactionId ?? '—'}</code>
                             </div>
-                            <div class="flex justify-between items-center pb-2 border-b border-gray-100">
-                                <span class="font-semibold text-gray-700">Vault Token:</span>
-                                <code class="bg-gray-100 px-3 py-1 rounded font-mono text-xs">{paymentResult.vaultToken ?? '—'}</code>
+                            <div class="flex justify-between items-center pb-2 border-b border-zinc-700">
+                                <span class="font-semibold text-zinc-400">Vault Token:</span>
+                                <code class="bg-zinc-900 text-zinc-200 px-3 py-1 rounded font-mono text-xs">{paymentResult.vaultToken ?? '—'}</code>
                             </div>
-                            <div class="flex justify-between items-center pb-2 border-b border-gray-100">
-                                <span class="font-semibold text-gray-700">Nonce:</span>
-                                <code class="bg-gray-100 px-3 py-1 rounded font-mono text-xs truncate max-w-[200px]">{paymentResult.nonce}</code>
+                            <div class="flex justify-between items-center pb-2 border-b border-zinc-700">
+                                <span class="font-semibold text-zinc-400">Nonce:</span>
+                                <code class="bg-zinc-900 text-zinc-200 px-3 py-1 rounded font-mono text-xs truncate max-w-[200px]">{paymentResult.nonce}</code>
                             </div>
                             <div class="flex justify-between items-center">
-                                <span class="font-semibold text-gray-700">Payer ID:</span>
-                                <code class="bg-gray-100 px-3 py-1 rounded font-mono text-xs">{paymentResult.payerId ?? '—'}</code>
+                                <span class="font-semibold text-zinc-400">Payer ID:</span>
+                                <code class="bg-zinc-900 text-zinc-200 px-3 py-1 rounded font-mono text-xs">{paymentResult.payerId ?? '—'}</code>
                             </div>
                         </div>
-                        <button class="mt-5 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded transition-all" onclick={() => location.reload()}>
+                        <button class="mt-5 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded transition-all" onclick={() => location.reload()}>
                             Place Another Order
                         </button>
                     </div>
 
                     <!-- Charge Stored Token -->
-                    <div class="bg-white rounded-lg border border-gray-200 p-5 mt-4">
-                        <h3 class="font-bold text-gray-900 mb-1">Charge Stored Token</h3>
-                        <p class="text-xs text-gray-500 mb-4">Use the vaulted payment method to make a merchant-initiated charge via GraphQL.</p>
+                    <div class="bg-zinc-800 rounded-lg border border-zinc-700 p-5 mt-4">
+                        <h3 class="font-bold text-zinc-100 mb-1">Charge Stored Token</h3>
+                        <p class="text-xs text-zinc-500 mb-4">Use the vaulted payment method to make a merchant-initiated charge via GraphQL.</p>
 
                         <div class="space-y-3">
                             <div>
-                                <label for="charge-token-id" class="block text-xs font-medium text-gray-600 mb-1">Payment Method Token</label>
+                                <label for="charge-token-id" class="block text-xs font-medium text-zinc-400 mb-1">Payment Method Token</label>
                                 <input id="charge-token-id" type="text" bind:value={chargeTokenId}
-                                    class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono bg-gray-50"
+                                    class="w-full px-3 py-2 border border-zinc-600 bg-zinc-700 text-zinc-100 rounded text-sm font-mono"
                                 />
                             </div>
                             <div>
-                                <label for="charge-amount" class="block text-xs font-medium text-gray-600 mb-1">Amount (USD)</label>
+                                <label for="charge-amount" class="block text-xs font-medium text-zinc-400 mb-1">Amount (USD)</label>
                                 <input id="charge-amount" type="text" bind:value={chargeAmount}
-                                    class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono"
+                                    class="w-full px-3 py-2 border border-zinc-600 bg-zinc-700 text-zinc-100 rounded text-sm font-mono"
                                 />
                             </div>
                             <button
                                 onclick={chargeStoredToken}
                                 disabled={chargingToken || !chargeTokenId}
-                                class="w-full py-2.5 bg-gray-900 text-white font-bold rounded text-sm transition-all
-                                       disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800"
+                                class="w-full py-2.5 bg-emerald-600 text-white font-bold rounded text-sm transition-all
+                                       disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700"
                             >
                                 {chargingToken ? 'Charging...' : 'Charge Token'}
                             </button>
 
                             {#if chargeResult}
-                                <div class="bg-green-50 border border-green-200 rounded p-3 text-sm">
-                                    <p class="font-semibold text-green-800">Charge successful</p>
-                                    <div class="mt-2 space-y-1 text-xs text-green-700">
+                                <div class="bg-emerald-900/30 border border-emerald-700/50 rounded p-3 text-sm">
+                                    <p class="font-semibold text-emerald-400">Charge successful</p>
+                                    <div class="mt-2 space-y-1 text-xs text-emerald-300">
                                         <div class="flex justify-between">
                                             <span>Transaction ID</span>
-                                            <code class="bg-white px-2 py-0.5 rounded">{chargeResult.transactionId}</code>
+                                            <code class="bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded">{chargeResult.transactionId}</code>
                                         </div>
                                     </div>
                                 </div>
                             {/if}
                             {#if chargeError}
-                                <div class="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
+                                <div class="bg-red-900/30 border border-red-700/50 rounded p-3 text-sm text-red-400">
                                     {chargeError}
                                 </div>
                             {/if}
@@ -650,7 +649,7 @@
         </div>
 
         <div class="mt-6">
-            <DeveloperLogs bind:logs title="Developer Logs — Braintree v6" />
+            <DeveloperLogs bind:logs title="Developer Logs — Doomsday Tix" />
         </div>
     </div>
 </div>

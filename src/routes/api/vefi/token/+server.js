@@ -66,7 +66,9 @@ export async function GET({ url }) {
             };
         } catch { /* ignore decode errors */ }
 
-        return json({ clientToken, tokenDebug });
+        // paypalClientId is not embedded in v3 PMT-scoped tokens — return it
+        // from env so the client can pass it explicitly to loadPayPalSDK.
+        return json({ clientToken, tokenDebug, paypalClientId: env.PAYPAL_AU_CLIENT_ID });
     } catch (error) {
         return json({ error: error.message }, { status: 500 });
     }

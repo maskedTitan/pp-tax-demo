@@ -160,32 +160,44 @@
 		addLog('GET /api/vefi/token', { paymentMethodToken: savedToken }, 'request');
 		const res = await fetch(`/api/vefi/token?paymentMethodToken=${encodeURIComponent(savedToken)}`);
 		const tokenData = await res.json();
-		addLog('Response /api/vefi/token', { clientToken: tokenData.clientToken ? '[token]' : null, error: tokenData.error, tokenDebug: tokenData.tokenDebug }, 'response');
+		addLog('Response /api/vefi/token', { clientToken: tokenData.clientToken ? '[token]' : null, error: tokenData.error, tokenDebug: tokenData.tokenDebug, paypalClientId: tokenData.paypalClientId ? '[present]' : null }, 'response');
 		if (tokenData.error) throw new Error(tokenData.error);
+
+		// Manually extract paymentMethodIdJwt from the v3 client token so we can
+		// pass it explicitly — autoSetDataUserIdToken alone hasn't surfaced the pencil.
+		let userIdToken = null;
+		try {
+			const decoded = JSON.parse(atob(tokenData.clientToken));
+			userIdToken = decoded.paymentMethodIdJwt ?? null;
+			addLog('paymentMethodIdJwt', { present: !!userIdToken }, 'info');
+		} catch {
+			addLog('paymentMethodIdJwt', 'decode failed — will proceed without it', 'error');
+		}
 
 		const bt = window.braintree;
 		const clientInstance = await bt.client.create({ authorization: tokenData.clientToken });
-		const paypalCheckout = await bt.paypalCheckout.create({
-			client: clientInstance,
-			autoSetDataUserIdToken: true,
-		});
-		await paypalCheckout.loadPayPalSDK({
+		const paypalCheckout = await bt.paypalCheckout.create({ client: clientInstance });
+
+		// v3 PMT-scoped tokens don't embed paypalClientId, so pass it explicitly.
+		// Without it, loadPayPalSDK can't construct the PayPal JS SDK URL and hangs.
+		const sdkParams = {
 			vault: true,
 			currency: 'USD',
-			intent: 'capture',
 			components: 'buttons,messages,saved-payment-methods',
 			env: 'sandbox',
-		});
-		addLog('loadPayPalSDK', 'Flow 2 — SavedPaymentMethods ready', 'info');
+		};
+		if (tokenData.paypalClientId) sdkParams['client-id'] = tokenData.paypalClientId;
+		if (userIdToken) sdkParams['user-id-token'] = userIdToken;
+
+		await paypalCheckout.loadPayPalSDK(sdkParams);
+		addLog('loadPayPalSDK', { params: Object.keys(sdkParams), hasUserIdToken: !!userIdToken, hasClientId: !!tokenData.paypalClientId }, 'info');
 
 		window.paypal.SavedPaymentMethods({
 			fundingSource: window.paypal.FUNDING.PAYPAL,
-			createOrder: () => paypalCheckout.createPayment({
-				flow: 'checkout',
-				amount,
-				currency: 'USD',
-				intent: 'capture',
-				editBillingAgreement: true,
+			createBillingAgreement: () => paypalCheckout.createPayment({
+				flow: 'vault',
+				enableShippingAddress: false,
+				billingAgreementDescription: 'Update PayPal funding instrument',
 			}),
 			onApprove: async (data) => {
 				try {
