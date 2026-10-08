@@ -274,7 +274,6 @@
 
     async function submitNonceToServer(payload) {
         try {
-            addLog("Submitting nonce to server...");
             const amountStr = zeroDollarAuth ? '0.00' : (sessionAmount || currentTotal.toString());
             const body = {
                 nonce: payload.nonce,
@@ -328,7 +327,7 @@
                 paymentMethodId: chargeTokenId,
                 amount: chargeAmount,
             };
-            addLog("GraphQL: chargePaymentMethod (stored token)", requestBody, 'request');
+            addLog("Charging stored token...", requestBody, 'request');
 
             const res = await fetch('/api/braintree/checkout', {
                 method: 'POST',
